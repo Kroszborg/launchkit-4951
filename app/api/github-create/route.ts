@@ -1,5 +1,4 @@
 import {
-  buildLandingTemplate,
   buildIndexHtml,
   buildIndexJsx,
   buildPackageJson,
@@ -7,7 +6,6 @@ import {
   buildTailwindConfig,
   buildViteConfig,
 } from "@/lib/landing-template";
-import type { CopyData } from "@/lib/schemas";
 
 export async function POST(request: Request) {
   const { token, repoName, description, landingCode, productName } = await request.json();
@@ -17,6 +15,22 @@ export async function POST(request: Request) {
   }
 
   try {
+    // Validate token first
+    const meRes = await fetch("https://api.github.com/user", {
+      headers: {
+        Authorization: `token ${token}`,
+        Accept: "application/vnd.github.v3+json",
+        "User-Agent": "LaunchKit",
+      },
+    });
+    if (!meRes.ok) {
+      return Response.json(
+        { error: "Invalid GitHub token. Make sure it has the 'repo' scope." },
+        { status: 401 }
+      );
+    }
+
+    // Create repo
     const createRes = await fetch("https://api.github.com/user/repos", {
       method: "POST",
       headers: {
@@ -35,22 +49,24 @@ export async function POST(request: Request) {
 
     if (!createRes.ok) {
       const err = await createRes.json();
-      return Response.json({ error: err.message || "Failed to create repo" }, { status: 400 });
+      const ghErrors = err.errors as Array<{ code: string; field: string }> | undefined;
+      const alreadyExists = ghErrors?.some((e) => e.code === "already_exists");
+      const errorMsg = alreadyExists
+        ? `A repo named "${repoName}" already exists on your account. Use a different name.`
+        : err.message || "Failed to create repo";
+      return Response.json({ error: errorMsg }, { status: 400 });
     }
 
     const repoData = await createRes.json();
     const { full_name, html_url } = repoData;
 
-    const indexHtml = buildIndexHtml(productName);
-    const packageJsonContent = buildPackageJson(productName, description);
-    const readmeContent = buildReadme(productName, description);
-
+    // Push all files
     const files = [
       { path: "src/LandingPage.jsx", content: landingCode },
       { path: "src/index.jsx", content: buildIndexJsx() },
-      { path: "index.html", content: indexHtml },
-      { path: "package.json", content: packageJsonContent },
-      { path: "README.md", content: readmeContent },
+      { path: "index.html", content: buildIndexHtml(productName) },
+      { path: "package.json", content: buildPackageJson(productName, description) },
+      { path: "README.md", content: buildReadme(productName, description) },
       { path: "tailwind.config.js", content: buildTailwindConfig() },
       { path: "vite.config.js", content: buildViteConfig() },
       { path: ".gitignore", content: "node_modules\ndist\n.env" },
@@ -82,12 +98,13 @@ export async function POST(request: Request) {
     return Response.json({
       repoUrl: html_url,
       fullName: full_name,
-      vercelUrl: `https://vercel.com/new/clone?repository-url=https://github.com/${full_name}&project-name=${repoName}&framework=vite`,
+      vercelUrl: `https://vercel.com/new/import?s=${encodeURIComponent(`https://github.com/${full_name}`)}`,
       netlifyUrl: `https://app.netlify.com/start/deploy?repository=https://github.com/${full_name}`,
       pagesUrl: `https://github.com/${full_name}/settings/pages`,
     });
   } catch (err) {
-    console.error("GitHub create error:", err);
-    return Response.json({ error: "Failed to create GitHub repo" }, { status: 500 });
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("GitHub create error:", msg);
+    return Response.json({ error: msg }, { status: 500 });
   }
 }

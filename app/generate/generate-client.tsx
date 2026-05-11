@@ -645,10 +645,11 @@ function GitHubModal({ repoName, setRepoName, token, setToken, loading, result, 
   loading: boolean; result: GhResult | null; error: string | null;
   onClose: () => void; onSubmit: () => void;
 }) {
+  const [hoveredDeploy, setHoveredDeploy] = useState<number | null>(null);
+
   const deployOptions = result ? [
-    { label: "Deploy to Vercel", url: result.vercelUrl, desc: "Auto-detects Vite. Live in ~30s.", icon: "▲" },
-    { label: "Deploy to Netlify", url: result.netlifyUrl, desc: "Connect repo. Free tier.", icon: "◆" },
-    { label: "GitHub Pages", url: result.pagesUrl, desc: "Enable in repo settings.", icon: "⬡" },
+    { label: "Deploy to Netlify", url: result.netlifyUrl, desc: "Import the repo and deploy. Free tier.", icon: "◆" },
+    { label: "GitHub Pages", url: result.pagesUrl, desc: "Enable Pages in repo settings.", icon: "⬡" },
   ] : [];
 
   return (
@@ -741,33 +742,47 @@ function GitHubModal({ repoName, setRepoName, token, setToken, loading, result, 
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              <div style={{ border: `1px solid ${BORDER}`, padding: "12px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <p style={{ color: FG, fontSize: 13, marginBottom: 3 }}>{result.fullName}</p>
-                  <p style={{ color: MUTED, fontSize: 11 }}>All files pushed successfully</p>
+              {/* Repo created */}
+              <div style={{ border: `1px solid ${BORDER}`, padding: "12px 14px" }}>
+                <p style={{ color: MUTED, fontSize: 11, marginBottom: 6 }}>Repository created</p>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <p style={{ color: FG, fontSize: 13, fontFamily: MONO }}>{result.fullName}</p>
+                  <a href={result.repoUrl} target="_blank" rel="noreferrer"
+                    style={{ display: "flex", alignItems: "center", gap: 5, color: MUTED, fontSize: 11, textDecoration: "none" }}>
+                    <ExternalLink size={12} />
+                    Open
+                  </a>
                 </div>
-                <a href={result.repoUrl} target="_blank" rel="noreferrer"
-                  style={{ display: "flex", alignItems: "center", gap: 5, color: MUTED, fontSize: 11, textDecoration: "none" }}>
-                  <ExternalLink size={12} />
-                  Open
-                </a>
               </div>
 
-              <p style={{ color: MUTED, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.1em" }}>
-                Deploy now
-              </p>
+              {/* Deploy instructions */}
+              <div style={{ border: `1px solid ${BORDER}`, padding: "14px 14px" }}>
+                <p style={{ color: MUTED, fontSize: 11, marginBottom: 12, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                  Deploy to Vercel
+                </p>
+                <ol style={{ color: FG, fontSize: 12, lineHeight: 2, margin: 0, paddingLeft: 16 }}>
+                  <li>Go to <a href="https://vercel.com/new" target="_blank" rel="noreferrer" style={{ color: FG, textDecoration: "underline" }}>vercel.com/new</a></li>
+                  <li>Click <strong>Import Git Repository</strong></li>
+                  <li>Select <code style={{ fontFamily: MONO, fontSize: 11, color: FG }}>{result.fullName}</code></li>
+                  <li>Framework: <strong>Vite</strong> — Deploy</li>
+                </ol>
+              </div>
 
+              {/* Other options */}
+              <p style={{ color: MUTED, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                Other options
+              </p>
               <div>
                 {deployOptions.map((d, i) => (
                   <a key={i} href={d.url} target="_blank" rel="noreferrer"
                     style={{
                       display: "flex", alignItems: "center", justifyContent: "space-between",
-                      border: `1px solid ${BORDER}`, padding: "12px 14px",
+                      border: `1px solid ${hoveredDeploy === i ? FG : BORDER}`, padding: "12px 14px",
                       marginTop: i > 0 ? -1 : 0, textDecoration: "none",
                       transition: "border-color 0.15s",
                     }}
-                    onMouseEnter={e => (e.currentTarget as HTMLAnchorElement).style.borderColor = FG}
-                    onMouseLeave={e => (e.currentTarget as HTMLAnchorElement).style.borderColor = BORDER}
+                    onMouseEnter={() => setHoveredDeploy(i)}
+                    onMouseLeave={() => setHoveredDeploy(null)}
                   >
                     <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                       <span style={{ color: FG, fontSize: 13, width: 18, textAlign: "center" }}>{d.icon}</span>

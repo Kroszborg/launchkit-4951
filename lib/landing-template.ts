@@ -252,6 +252,8 @@ export function buildLandingTemplate(d: CopyData): string {
   lines.push("    </div>");
   lines.push("  );");
   lines.push("};");
+  lines.push("");
+  lines.push("export default LandingPage;");
 
   return lines.join("\n");
 }
