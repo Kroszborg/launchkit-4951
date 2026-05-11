@@ -1,97 +1,142 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   Copy, Check, GitBranch, ExternalLink, Code2, Eye,
-  Loader2, ArrowLeft, Zap, RotateCcw, Columns2,
+  Loader2, ArrowLeft, Zap, RotateCcw, Columns2, Pencil, X,
 } from "lucide-react";
 
 const GithubIcon = GitBranch;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface CopyData {
-  name: string;
-  pitch: string;
-  tagline: string;
-  headline: string;
-  subheadline: string;
-  features: { title: string; desc: string }[];
-  cta: string;
-  twitter: string;
-  linkedin: string;
-  producthunt: string;
+  name: string; pitch: string; tagline: string; headline: string;
+  subheadline: string; features: { title: string; desc: string }[];
+  cta: string; twitter: string; linkedin: string; producthunt: string;
 }
 interface GenerateResult { copy: CopyData; landingCode: string; }
 interface RepoMeta {
-  name: string;
-  description: string;
-  stars: number;
-  language: string;
-  topics: string[];
-  readme: string;
-  packageInfo: string;
-  owner: string;
-  repo: string;
-  repoUrl: string;
+  name: string; description: string; stars: number; language: string;
+  topics: string[]; readme: string; packageInfo: string;
+  owner: string; repo: string; repoUrl: string;
 }
 interface GhResult {
-  repoUrl: string;
-  fullName: string;
-  vercelUrl: string;
-  netlifyUrl: string;
-  pagesUrl: string;
+  repoUrl: string; fullName: string;
+  vercelUrl: string; netlifyUrl: string; pagesUrl: string;
 }
-type Tab = "landing" | "social" | "pitch";
+type Tab      = "landing" | "social" | "pitch";
 type LandingView = "split" | "preview" | "code";
+type Tone     = "startup" | "technical" | "enterprise";
 
-const MONO = "'DM Mono', monospace";
-const SERIF = "'Playfair Display', serif";
-const BG = "#0a0a0a";
+// ─── Constants ────────────────────────────────────────────────────────────────
+const MONO    = "'DM Mono', monospace";
+const SERIF   = "'Playfair Display', serif";
+const BG      = "#0a0a0a";
 const SURFACE = "#111111";
-const BORDER = "#2a2a2a";
-const FG = "#e8e0d0";
-const MUTED = "#6b6b6b";
-const DIM = "#3a3a3a";
+const BORDER  = "#2a2a2a";
+const FG      = "#e8e0d0";
+const MUTED   = "#6b6b6b";
+const DIM     = "#3a3a3a";
+const GOLD    = "#c9a96e";
+
+const SESSION_KEY  = "lk_session_v1";
+const GH_TOKEN_KEY = "lk_gh_token";
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function GenerateClient({ initialInput }: { initialInput: string }) {
   const router = useRouter();
+  const abortRef = useRef<AbortController | null>(null);
 
   const [input, setInput] = useState(initialInput);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<GenerateResult | null>(null);
+  const [editedCopy, setEditedCopy] = useState<CopyData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("landing");
   const [landingView, setLandingView] = useState<LandingView>("split");
   const [repoMeta, setRepoMeta] = useState<RepoMeta | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
   const [hasGenerated, setHasGenerated] = useState(false);
+  const [tone, setTone] = useState<Tone>("startup");
+  const [restoredSession, setRestoredSession] = useState(false);
 
   // GitHub modal
   const [showGithub, setShowGithub] = useState(false);
   const [ghToken, setGhToken] = useState("");
+  const [ghSavedToken, setGhSavedToken] = useState("");
   const [ghRepoName, setGhRepoName] = useState("");
   const [ghLoading, setGhLoading] = useState(false);
   const [ghResult, setGhResult] = useState<GhResult | null>(null);
   const [ghError, setGhError] = useState<string | null>(null);
 
-  useEffect(() => { if (initialInput) handleGenerate(initialInput); }, []);
+  // ── Fix 1: Restore session from localStorage on mount ──────────────────────
+  useEffect(() => {
+    const savedToken = localStorage.getItem(GH_TOKEN_KEY) || "";
+    setGhSavedToken(savedToken);
+    if (savedToken) setGhToken(savedToken);
+
+    if (initialInput) return; // URL has ?input=, skip restore
+    try {
+      const raw = localStorage.getItem(SESSION_KEY);
+      if (!raw) return;
+      const { input: si, repoMeta: sm, result: sr, ts } = JSON.parse(raw);
+      if (Date.now() - ts > 24 * 3600 * 1000) return; // expire after 24h
+      setInput(si || "");
+      setRepoMeta(sm);
+      setResult(sr);
+      setEditedCopy({ ...sr.copy });
+      if (sm?.name) setGhRepoName(`${sm.name}-landing`);
+      setHasGenerated(true);
+      setRestoredSession(true);
+    } catch { /* ignore corrupt storage */ }
+  }, []);
+
+  // ── Fix 1: Save session after successful generation ────────────────────────
+  useEffect(() => {
+    if (!result || !hasGenerated) return;
+    try {
+      localStorage.setItem(SESSION_KEY, JSON.stringify({ input, repoMeta, result, ts: Date.now() }));
+    } catch { /* storage full, ignore */ }
+  }, [result, hasGenerated]);
+
+  // Sync editedCopy when a fresh generation arrives
+  useEffect(() => {
+    if (result) setEditedCopy({ ...result.copy });
+  }, [result]);
+
+  // ── Fix 2: Helper to update individual copy fields ─────────────────────────
+  function updateField(field: keyof CopyData, value: string) {
+    setEditedCopy(prev => prev ? { ...prev, [field]: value } : null);
+  }
+
+  const copy = editedCopy ?? result?.copy;
+
+  function handleCancel() {
+    abortRef.current?.abort();
+    setLoading(false);
+  }
 
   const isGitHubUrl = (v: string) => /github\.com\/[^/]+\/[^/\s?#]+/.test(v);
 
-  async function handleGenerate(val?: string) {
+  async function handleGenerate(val?: string, toneProp?: Tone) {
     const v = (val ?? input).trim();
     if (!v) return;
-    setLoading(true); setError(null); setResult(null);
+
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    setLoading(true); setError(null); setResult(null); setEditedCopy(null);
     setHasGenerated(false); setGhResult(null); setActiveTab("landing");
+    setRestoredSession(false);
 
     try {
       let meta: RepoMeta | null = null;
       if (isGitHubUrl(v)) {
         const r = await fetch("/api/fetch-repo", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url: v }),
+          body: JSON.stringify({ url: v }), signal: controller.signal,
         });
         if (r.ok) {
           meta = await r.json();
@@ -105,19 +150,19 @@ export default function GenerateClient({ initialInput }: { initialInput: string 
 
       const genRes = await fetch("/api/generate", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ description: v, repoMeta: meta }),
+        body: JSON.stringify({ description: v, repoMeta: meta, tone: toneProp ?? tone }),
+        signal: controller.signal,
       });
-      if (!genRes.ok) {
-        const e = await genRes.json();
-        throw new Error(e.error || "Generation failed");
-      }
+      if (!genRes.ok) { const e = await genRes.json(); throw new Error(e.error || "Generation failed"); }
       const data = await genRes.json();
       setResult(data); setHasGenerated(true);
     } catch (e: unknown) {
+      if (e instanceof Error && e.name === "AbortError") return;
       setError(e instanceof Error ? e.message : "Something went wrong.");
     } finally { setLoading(false); }
   }
 
+  // ── Fix 3: Save token after successful repo creation ───────────────────────
   async function handleGithubCreate() {
     if (!ghToken || !ghRepoName || !result) return;
     setGhLoading(true); setGhError(null);
@@ -126,85 +171,108 @@ export default function GenerateClient({ initialInput }: { initialInput: string 
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           token: ghToken, repoName: ghRepoName,
-          description: result.copy.tagline,
+          description: copy?.tagline || "",
           landingCode: result.landingCode,
           productName: repoMeta?.name || input.slice(0, 40),
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed");
+      // Save token on success
+      localStorage.setItem(GH_TOKEN_KEY, ghToken);
+      setGhSavedToken(ghToken);
       setGhResult(data);
     } catch (e: unknown) {
       setGhError(e instanceof Error ? e.message : "Failed");
     } finally { setGhLoading(false); }
   }
 
-  function copy(text: string, key: string) {
+  function copyText(text: string, key: string) {
     navigator.clipboard.writeText(text).then(() => {
       setCopied(key); setTimeout(() => setCopied(null), 2000);
     });
   }
 
+  function clearSession() {
+    localStorage.removeItem(SESSION_KEY);
+    setRestoredSession(false);
+    setResult(null); setEditedCopy(null);
+    setHasGenerated(false); setInput(""); setRepoMeta(null);
+  }
+
   const tabs: { key: Tab; label: string }[] = [
     { key: "landing", label: "Landing Page" },
-    { key: "social", label: "Social Posts" },
-    { key: "pitch", label: "Pitch Line" },
+    { key: "social",  label: "Social Posts" },
+    { key: "pitch",   label: "Pitch Line" },
   ];
+
+  const toneLabels: Record<Tone, string> = { startup: "Startup", technical: "Technical", enterprise: "Enterprise" };
 
   return (
     <div style={{ background: BG, fontFamily: MONO, minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+
       {/* ── Sticky Nav ── */}
       <nav style={{
         position: "sticky", top: 0, zIndex: 50,
         background: BG, borderBottom: `1px solid ${BORDER}`,
-        padding: "10px 24px", display: "flex", alignItems: "center", gap: 16,
+        padding: "10px 24px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
       }}>
-        <button onClick={() => router.push("/")} style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", cursor: "pointer" }}>
+        <button onClick={() => router.push("/")} style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", cursor: "pointer", flexShrink: 0 }}>
           <ArrowLeft size={14} color={MUTED} />
           <span style={{ fontFamily: SERIF, fontSize: 20, fontWeight: 600, color: FG }}>LaunchKit</span>
         </button>
 
         {/* Input bar */}
-        <div style={{ flex: 1, maxWidth: 560, marginLeft: 8, display: "flex", border: `1px solid ${BORDER}` }}>
+        <div style={{ flex: 1, maxWidth: 520, display: "flex", border: `1px solid ${BORDER}` }}>
           <input
             type="text" value={input}
             onChange={e => setInput(e.target.value)}
-            onKeyDown={e => e.key === "Enter" && handleGenerate()}
+            onKeyDown={e => e.key === "Enter" && !loading && handleGenerate()}
             placeholder="GitHub URL or product description..."
-            style={{
-              flex: 1, padding: "8px 14px", fontSize: 12,
-              background: SURFACE, color: FG, border: "none", outline: "none",
-              fontFamily: MONO,
-            }}
+            style={{ flex: 1, padding: "8px 14px", fontSize: 12, background: SURFACE, color: FG, border: "none", outline: "none", fontFamily: MONO }}
           />
-          <button
-            onClick={() => handleGenerate()} disabled={loading}
-            style={{
-              padding: "8px 18px", fontSize: 12, fontWeight: 500,
-              background: FG, color: BG, border: "none", cursor: loading ? "not-allowed" : "pointer",
-              opacity: loading ? 0.5 : 1, display: "flex", alignItems: "center", gap: 6,
-              fontFamily: MONO, whiteSpace: "nowrap",
-            }}
-          >
-            {loading ? <Loader2 size={13} className="animate-spin" /> : <RotateCcw size={13} />}
-            {loading ? "Generating..." : "Generate"}
-          </button>
+          {loading ? (
+            <button onClick={handleCancel} style={{ padding: "8px 14px", fontSize: 11, background: "#3a1a1a", color: "#ff6b6b", border: "none", cursor: "pointer", fontFamily: MONO, display: "flex", alignItems: "center", gap: 5, whiteSpace: "nowrap" }}>
+              <X size={12} /> Cancel
+            </button>
+          ) : (
+            <button onClick={() => handleGenerate()} style={{ padding: "8px 14px", fontSize: 12, fontWeight: 500, background: FG, color: BG, border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontFamily: MONO, whiteSpace: "nowrap" }}>
+              <RotateCcw size={12} /> Generate
+            </button>
+          )}
+        </div>
+
+        {/* Fix 2: Tone selector */}
+        <div style={{ display: "flex", border: `1px solid ${BORDER}`, flexShrink: 0 }}>
+          {(["startup", "technical", "enterprise"] as Tone[]).map(t => (
+            <button key={t} onClick={() => setTone(t)} style={{
+              padding: "7px 11px", fontSize: 10, cursor: "pointer",
+              background: tone === t ? BORDER : "none",
+              color: tone === t ? FG : MUTED,
+              border: "none", fontFamily: MONO, letterSpacing: "0.04em",
+              transition: "background 0.15s, color 0.15s",
+            }}>
+              {toneLabels[t]}
+            </button>
+          ))}
         </div>
 
         {hasGenerated && result && (
-          <button
-            onClick={() => setShowGithub(true)}
-            style={{
-              marginLeft: "auto", display: "flex", alignItems: "center", gap: 6,
-              padding: "8px 16px", fontSize: 12, fontWeight: 500,
-              background: FG, color: BG, border: "none", cursor: "pointer", fontFamily: MONO,
-            }}
-          >
-            <GithubIcon size={13} />
-            Push to GitHub
+          <button onClick={() => setShowGithub(true)} style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", fontSize: 12, fontWeight: 500, background: FG, color: BG, border: "none", cursor: "pointer", fontFamily: MONO, flexShrink: 0 }}>
+            <GithubIcon size={13} /> Push to GitHub
           </button>
         )}
       </nav>
+
+      {/* Fix 1: Session restored banner */}
+      {restoredSession && (
+        <div style={{ background: "#0d0d0d", borderBottom: `1px solid ${BORDER}`, padding: "7px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 11 }}>
+          <span style={{ color: MUTED }}>Session restored from your last visit</span>
+          <button onClick={clearSession} style={{ color: MUTED, background: "none", border: "none", cursor: "pointer", fontFamily: MONO, fontSize: 11, display: "flex", alignItems: "center", gap: 4 }}>
+            <X size={10} /> Clear
+          </button>
+        </div>
+      )}
 
       {/* ── Body ── */}
       <div style={{ flex: 1, padding: "28px 24px 48px", maxWidth: 1400, margin: "0 auto", width: "100%", boxSizing: "border-box" }}>
@@ -213,9 +281,8 @@ export default function GenerateClient({ initialInput }: { initialInput: string 
 
         {error && !loading && (
           <div style={{ border: `1px solid ${BORDER}`, padding: 40, textAlign: "center" }}>
-            <p style={{ color: MUTED, fontSize: 13, marginBottom: 16 }}>{error}</p>
-            <button onClick={() => handleGenerate()}
-              style={{ border: `1px solid ${BORDER}`, background: "none", color: FG, padding: "8px 20px", fontSize: 12, cursor: "pointer", fontFamily: MONO }}>
+            <p style={{ color: "#ff6b6b", fontSize: 13, marginBottom: 16, maxWidth: 480, margin: "0 auto 16px" }}>{error}</p>
+            <button onClick={() => handleGenerate()} style={{ border: `1px solid ${BORDER}`, background: "none", color: FG, padding: "8px 20px", fontSize: 12, cursor: "pointer", fontFamily: MONO }}>
               Try again
             </button>
           </div>
@@ -225,49 +292,41 @@ export default function GenerateClient({ initialInput }: { initialInput: string 
           <EmptyState onExample={ex => { setInput(ex); handleGenerate(ex); }} />
         )}
 
-        {result && hasGenerated && !loading && (
+        {copy && hasGenerated && !loading && (
           <div>
             {/* Pitch strip */}
-            <div style={{
-              display: "flex", alignItems: "center", justifyContent: "space-between",
-              gap: 16, marginBottom: 28, padding: "18px 20px",
-              border: `1px solid ${BORDER}`, background: SURFACE,
-            }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, marginBottom: 28, padding: "18px 20px", border: `1px solid ${BORDER}`, background: SURFACE }}>
               <div>
                 {repoMeta?.name && <span style={{ color: MUTED, fontSize: 11, display: "block", marginBottom: 4 }}>{repoMeta.name}</span>}
-                <div style={{ fontFamily: SERIF, fontSize: 20, fontStyle: "italic", color: FG }}>
-                  &ldquo;{result.copy.pitch}&rdquo;
-                </div>
+                <div style={{ fontFamily: SERIF, fontSize: 20, fontStyle: "italic", color: FG }}>&ldquo;{copy.pitch}&rdquo;</div>
               </div>
-              <CopyBtn text={result.copy.pitch} id="pitch-top" copied={copied} onCopy={copy} />
+              <CopyBtn text={copy.pitch} id="pitch-top" copied={copied} onCopy={copyText} />
             </div>
 
             {/* Tab bar */}
             <div style={{ display: "flex", borderBottom: `1px solid ${BORDER}`, marginBottom: 28 }}>
               {tabs.map(t => (
-                <button key={t.key} onClick={() => setActiveTab(t.key)}
-                  style={{
-                    background: "none", border: "none", cursor: "pointer",
-                    fontFamily: MONO, fontSize: 12, padding: "12px 20px",
-                    borderBottom: activeTab === t.key ? `2px solid ${FG}` : "2px solid transparent",
-                    color: activeTab === t.key ? FG : MUTED,
-                    marginBottom: -1, transition: "color 0.15s", whiteSpace: "nowrap",
-                  }}>
+                <button key={t.key} onClick={() => setActiveTab(t.key)} style={{
+                  background: "none", border: "none", cursor: "pointer",
+                  fontFamily: MONO, fontSize: 12, padding: "12px 20px",
+                  borderBottom: activeTab === t.key ? `2px solid ${FG}` : "2px solid transparent",
+                  color: activeTab === t.key ? FG : MUTED, marginBottom: -1,
+                  transition: "color 0.15s", whiteSpace: "nowrap",
+                }}>
                   {t.label}
                 </button>
               ))}
             </div>
 
-            {activeTab === "landing" && (
-              <LandingTab
-                data={result.copy} code={result.landingCode}
-                view={landingView} setView={setLandingView}
-                copied={copied} onCopy={copy}
-                onPushGithub={() => setShowGithub(true)}
-              />
+            {activeTab === "landing" && result && (
+              <LandingTab data={copy} code={result.landingCode} view={landingView} setView={setLandingView} copied={copied} onCopy={copyText} onPushGithub={() => setShowGithub(true)} onEdit={updateField} />
             )}
-            {activeTab === "social" && <SocialTab data={result.copy} copied={copied} onCopy={copy} />}
-            {activeTab === "pitch" && <PitchTab data={result.copy} copied={copied} onCopy={copy} />}
+            {activeTab === "social" && (
+              <SocialTab data={copy} copied={copied} onCopy={copyText} onEdit={updateField} />
+            )}
+            {activeTab === "pitch" && (
+              <PitchTab data={copy} copied={copied} onCopy={copyText} onEdit={updateField} />
+            )}
           </div>
         )}
       </div>
@@ -276,6 +335,8 @@ export default function GenerateClient({ initialInput }: { initialInput: string 
         <GitHubModal
           repoName={ghRepoName} setRepoName={setGhRepoName}
           token={ghToken} setToken={setGhToken}
+          savedToken={ghSavedToken}
+          onDisconnect={() => { localStorage.removeItem(GH_TOKEN_KEY); setGhSavedToken(""); setGhToken(""); }}
           loading={ghLoading} result={ghResult} error={ghError}
           onClose={() => { setShowGithub(false); setGhResult(null); setGhError(null); }}
           onSubmit={handleGithubCreate}
@@ -295,21 +356,11 @@ function LoadingState() {
   }, []);
   return (
     <div style={{ border: `1px solid ${BORDER}`, padding: "64px 32px", textAlign: "center" }}>
-      <div style={{ fontFamily: SERIF, fontSize: 28, fontStyle: "italic", color: FG, marginBottom: 40 }}>
-        Building your launch kit
-      </div>
+      <div style={{ fontFamily: SERIF, fontSize: 28, fontStyle: "italic", color: FG, marginBottom: 40 }}>Building your launch kit</div>
       <div style={{ maxWidth: 280, margin: "0 auto", textAlign: "left" }}>
         {steps.map((s, i) => (
-          <div key={i} style={{
-            display: "flex", alignItems: "center", gap: 10,
-            fontSize: 12, marginBottom: 8, fontFamily: MONO,
-            color: i < step ? DIM : i === step ? FG : "#1a1a1a",
-            transition: "color 0.3s",
-          }}>
-            <span style={{
-              width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
-              background: i < step ? DIM : i === step ? FG : "#1a1a1a",
-            }} />
+          <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12, marginBottom: 8, fontFamily: MONO, color: i < step ? DIM : i === step ? FG : "#1a1a1a", transition: "color 0.3s" }}>
+            <span style={{ width: 6, height: 6, borderRadius: "50%", flexShrink: 0, background: i < step ? DIM : i === step ? FG : "#1a1a1a" }} />
             {s}
           </div>
         ))}
@@ -328,18 +379,10 @@ function EmptyState({ onExample }: { onExample: (ex: string) => void }) {
   ];
   return (
     <div style={{ maxWidth: 600 }}>
-      <p style={{ color: MUTED, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.15em", marginBottom: 12 }}>
-        Try an example
-      </p>
+      <p style={{ color: MUTED, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.15em", marginBottom: 12 }}>Try an example</p>
       {examples.map((ex, i) => (
         <button key={i} onClick={() => onExample(ex)}
-          style={{
-            width: "100%", textAlign: "left", display: "flex", alignItems: "center", justifyContent: "space-between",
-            border: `1px solid ${BORDER}`, marginTop: i > 0 ? -1 : 0,
-            padding: "14px 16px", fontSize: 13, color: MUTED,
-            background: "none", cursor: "pointer", fontFamily: MONO,
-            transition: "color 0.15s, border-color 0.15s",
-          }}
+          style={{ width: "100%", textAlign: "left", display: "flex", alignItems: "center", justifyContent: "space-between", border: `1px solid ${BORDER}`, marginTop: i > 0 ? -1 : 0, padding: "14px 16px", fontSize: 13, color: MUTED, background: "none", cursor: "pointer", fontFamily: MONO, transition: "color 0.15s, border-color 0.15s" }}
           onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = FG; (e.currentTarget as HTMLButtonElement).style.borderColor = FG; }}
           onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = MUTED; (e.currentTarget as HTMLButtonElement).style.borderColor = BORDER; }}
         >
@@ -352,174 +395,96 @@ function EmptyState({ onExample }: { onExample: (ex: string) => void }) {
 }
 
 // ─── Landing Tab ──────────────────────────────────────────────────────────────
-function LandingTab({ data, code, view, setView, copied, onCopy, onPushGithub }: {
-  data: CopyData; code: string;
-  view: LandingView; setView: (v: LandingView) => void;
+function LandingTab({ data, code, view, setView, copied, onCopy, onPushGithub, onEdit }: {
+  data: CopyData; code: string; view: LandingView; setView: (v: LandingView) => void;
   copied: string | null; onCopy: (t: string, k: string) => void;
-  onPushGithub: () => void;
+  onPushGithub: () => void; onEdit: (field: keyof CopyData, value: string) => void;
 }) {
   const [iframeLoaded, setIframeLoaded] = useState(false);
 
   const iframeHtml = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<html lang="en"><head>
+<meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
 <script src="https://cdn.tailwindcss.com"></script>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet"/>
-<style>
-  body{margin:0;background:#0a0a0a;color:#e8e0d0;}
-  *{box-sizing:border-box;}
-  #error{display:none;padding:32px;font-family:monospace;font-size:12px;color:#ff6b6b;white-space:pre-wrap;background:#0a0a0a;}
-</style>
-<script>
-  tailwind.config={theme:{extend:{fontFamily:{serif:['Playfair Display','serif'],mono:['DM Mono','monospace']}}}}
-</script>
-</head>
-<body>
-<div id="root"></div>
-<div id="error"></div>
+<style>body{margin:0;background:#0a0a0a;color:#e8e0d0;}*{box-sizing:border-box;}#error{display:none;padding:32px;font-family:monospace;font-size:12px;color:#ff6b6b;white-space:pre-wrap;background:#0a0a0a;}</style>
+<script>tailwind.config={theme:{extend:{fontFamily:{serif:['Playfair Display','serif'],mono:['DM Mono','monospace']}}}}</script>
+</head><body>
+<div id="root"></div><div id="error"></div>
 <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <script type="text/babel" data-presets="react">
-const {useState, useEffect} = React;
-try {
-${code.replace(/export default \w+;?/g, '')}
+const {useState,useEffect}=React;
+try{
+${code.replace(/export default \w+;?/g, "")}
 ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(LandingPage));
-} catch(e) {
-  document.getElementById('error').style.display = 'block';
-  document.getElementById('error').textContent = 'Preview error: ' + e.message + '\\n\\n' + e.stack;
-}
-</script>
-</body>
-</html>`;
-
-  const EDITOR_H = 820;
+}catch(e){document.getElementById('error').style.display='block';document.getElementById('error').textContent='Preview error: '+e.message+'\\n\\n'+e.stack;}
+</script></body></html>`;
 
   return (
     <div>
-      {/* ── Toolbar ── */}
+      {/* Toolbar */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
         <div style={{ display: "flex", border: `1px solid ${BORDER}`, padding: 2, gap: 2 }}>
-          {([
-            { key: "split", label: "Split", icon: Columns2 },
-            { key: "preview", label: "Preview", icon: Eye },
-            { key: "code", label: "Code", icon: Code2 },
-          ] as const).map(({ key, label, icon: Icon }) => (
-            <button key={key} onClick={() => setView(key)}
-              style={{
-                padding: "5px 12px", fontSize: 11, cursor: "pointer",
-                display: "flex", alignItems: "center", gap: 5,
-                background: view === key ? FG : "none",
-                color: view === key ? BG : MUTED,
-                border: "none", fontFamily: MONO,
-                transition: "background 0.15s, color 0.15s",
-              }}>
-              <Icon size={11} />
-              {label}
+          {([{ key: "split", label: "Split", icon: Columns2 }, { key: "preview", label: "Preview", icon: Eye }, { key: "code", label: "Code", icon: Code2 }] as const).map(({ key, label, icon: Icon }) => (
+            <button key={key} onClick={() => setView(key)} style={{ padding: "5px 12px", fontSize: 11, cursor: "pointer", display: "flex", alignItems: "center", gap: 5, background: view === key ? FG : "none", color: view === key ? BG : MUTED, border: "none", fontFamily: MONO, transition: "background 0.15s, color 0.15s" }}>
+              <Icon size={11} />{label}
             </button>
           ))}
         </div>
-
         <div style={{ display: "flex", gap: 8 }}>
           <CopyBtn text={code} id="code-copy" copied={copied} onCopy={onCopy} label="Copy Code" />
-          <button onClick={onPushGithub}
-            style={{
-              display: "flex", alignItems: "center", gap: 6,
-              padding: "6px 14px", fontSize: 11, fontWeight: 500,
-              background: FG, color: BG, border: "none", cursor: "pointer", fontFamily: MONO,
-            }}>
-            <GithubIcon size={11} />
-            Push to GitHub
+          <button onClick={onPushGithub} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", fontSize: 11, fontWeight: 500, background: FG, color: BG, border: "none", cursor: "pointer", fontFamily: MONO }}>
+            <GithubIcon size={11} /> Push to GitHub
           </button>
         </div>
       </div>
 
-      {/* ── Editor / Preview ── */}
-      <div style={{
-        border: `1px solid ${BORDER}`,
-        display: "grid",
-        gridTemplateColumns: view === "split" ? "1fr 1fr" : "1fr",
-        height: EDITOR_H,
-        overflow: "hidden",
-      }}>
+      {/* Editor / Preview */}
+      <div style={{ border: `1px solid ${BORDER}`, display: "grid", gridTemplateColumns: view === "split" ? "1fr 1fr" : "1fr", height: 820, overflow: "hidden" }}>
         {(view === "code" || view === "split") && (
-          <div style={{
-            display: "flex", flexDirection: "column", overflow: "hidden",
-            borderRight: view === "split" ? `1px solid ${BORDER}` : "none",
-          }}>
-            <div style={{
-              padding: "8px 14px", borderBottom: `1px solid ${BORDER}`,
-              background: SURFACE, display: "flex", justifyContent: "space-between", alignItems: "center",
-              flexShrink: 0,
-            }}>
+          <div style={{ display: "flex", flexDirection: "column", overflow: "hidden", borderRight: view === "split" ? `1px solid ${BORDER}` : "none" }}>
+            <div style={{ padding: "8px 14px", borderBottom: `1px solid ${BORDER}`, background: SURFACE, display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
               <span style={{ color: MUTED, fontSize: 11 }}>LandingPage.jsx</span>
               <span style={{ color: DIM, fontSize: 11 }}>{code.split("\n").length} lines</span>
             </div>
             <div style={{ flex: 1, overflow: "auto", background: "#0d0d0d" }}>
-              <pre style={{
-                margin: 0, padding: 16, fontSize: 11, lineHeight: 1.7,
-                color: "#c8bfaf", fontFamily: MONO, whiteSpace: "pre-wrap",
-                wordBreak: "break-word", tabSize: 2,
-              }}>
+              <pre style={{ margin: 0, padding: 16, fontSize: 11, lineHeight: 1.7, color: "#c8bfaf", fontFamily: MONO, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
                 <code>{code}</code>
               </pre>
             </div>
           </div>
         )}
-
         {(view === "preview" || view === "split") && (
           <div style={{ display: "flex", flexDirection: "column", overflow: "hidden", background: BG }}>
-            <div style={{
-              padding: "8px 14px", borderBottom: `1px solid ${BORDER}`,
-              background: SURFACE, display: "flex", alignItems: "center", gap: 8, flexShrink: 0,
-            }}>
-              <div style={{ display: "flex", gap: 5 }}>
-                {[0, 1, 2].map(d => <div key={d} style={{ width: 9, height: 9, borderRadius: "50%", background: DIM }} />)}
-              </div>
+            <div style={{ padding: "8px 14px", borderBottom: `1px solid ${BORDER}`, background: SURFACE, display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+              <div style={{ display: "flex", gap: 5 }}>{[0, 1, 2].map(d => <div key={d} style={{ width: 9, height: 9, borderRadius: "50%", background: DIM }} />)}</div>
               <span style={{ color: DIM, fontSize: 11, marginLeft: 4 }}>Live Preview</span>
               {!iframeLoaded && <Loader2 size={11} className="animate-spin" style={{ color: MUTED, marginLeft: "auto" }} />}
             </div>
-            <iframe
-              srcDoc={iframeHtml}
-              style={{ flex: 1, width: "100%", border: "none" }}
-              sandbox="allow-scripts allow-same-origin"
-              onLoad={() => setIframeLoaded(true)}
-            />
+            <iframe srcDoc={iframeHtml} style={{ flex: 1, width: "100%", border: "none" }} sandbox="allow-scripts allow-same-origin" onLoad={() => setIframeLoaded(true)} />
           </div>
         )}
       </div>
 
-      {/* ── Copy Cards ── */}
+      {/* Copy assets */}
       <div style={{ marginTop: 32 }}>
-        <p style={{ color: MUTED, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.15em", marginBottom: 12 }}>
-          Copy assets
-        </p>
+        <p style={{ color: MUTED, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.15em", marginBottom: 12 }}>Copy assets</p>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 0 }}>
-          <Block label="Headline" content={data.headline} id="hl" copied={copied} onCopy={onCopy} serif />
-          <Block label="Subheadline" content={data.subheadline} id="sub" copied={copied} onCopy={onCopy} />
-          <Block label="Tagline" content={data.tagline} id="tl" copied={copied} onCopy={onCopy} serif />
-          <Block label="CTA Button" content={data.cta} id="cta" copied={copied} onCopy={onCopy} />
+          <Block label="Headline"    content={data.headline}    id="hl"  copied={copied} onCopy={onCopy} serif onEdit={v => onEdit("headline", v)} />
+          <Block label="Subheadline" content={data.subheadline} id="sub" copied={copied} onCopy={onCopy}       onEdit={v => onEdit("subheadline", v)} />
+          <Block label="Tagline"     content={data.tagline}     id="tl"  copied={copied} onCopy={onCopy} serif onEdit={v => onEdit("tagline", v)} />
+          <Block label="CTA Button"  content={data.cta}         id="cta" copied={copied} onCopy={onCopy}       onEdit={v => onEdit("cta", v)} />
         </div>
-
         <div style={{ border: `1px solid ${BORDER}`, marginTop: -1 }}>
-          <div style={{
-            padding: "8px 14px", borderBottom: `1px solid ${BORDER}`,
-            background: SURFACE, display: "flex", justifyContent: "space-between", alignItems: "center",
-          }}>
+          <div style={{ padding: "8px 14px", borderBottom: `1px solid ${BORDER}`, background: SURFACE, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span style={{ color: MUTED, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.1em" }}>Features</span>
-            <CopyBtn
-              text={data.features.map(f => `${f.title}: ${f.desc}`).join("\n")}
-              id="feats" copied={copied} onCopy={onCopy}
-            />
+            <CopyBtn text={data.features.map(f => `${f.title}: ${f.desc}`).join("\n")} id="feats" copied={copied} onCopy={onCopy} />
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
             {data.features.map((f, i) => (
-              <div key={i} style={{
-                padding: "16px 16px",
-                borderRight: i < data.features.length - 1 ? `1px solid ${BORDER}` : "none",
-              }}>
+              <div key={i} style={{ padding: "16px", borderRight: i < data.features.length - 1 ? `1px solid ${BORDER}` : "none" }}>
                 <div style={{ fontFamily: SERIF, color: FG, fontSize: 15, fontWeight: 500, marginBottom: 6 }}>{f.title}</div>
                 <div style={{ color: MUTED, fontSize: 12, lineHeight: 1.6 }}>{f.desc}</div>
               </div>
@@ -532,53 +497,53 @@ ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(
 }
 
 // ─── Social Tab ───────────────────────────────────────────────────────────────
-function SocialTab({ data, copied, onCopy }: { data: CopyData; copied: string | null; onCopy: (t: string, k: string) => void }) {
+function SocialTab({ data, copied, onCopy, onEdit }: {
+  data: CopyData; copied: string | null;
+  onCopy: (t: string, k: string) => void;
+  onEdit: (field: keyof CopyData, value: string) => void;
+}) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-      <Block label="Twitter / X" content={data.twitter} id="tw" copied={copied} onCopy={onCopy} large />
-      <Block label="LinkedIn" content={data.linkedin} id="li" copied={copied} onCopy={onCopy} large />
-      <Block label="Product Hunt Tagline" content={data.producthunt} id="ph" copied={copied} onCopy={onCopy} serif />
+      <Block label="Twitter / X"        content={data.twitter}     id="tw" copied={copied} onCopy={onCopy} large onEdit={v => onEdit("twitter", v)} />
+      <Block label="LinkedIn"           content={data.linkedin}    id="li" copied={copied} onCopy={onCopy} large onEdit={v => onEdit("linkedin", v)} />
+      <Block label="Product Hunt Tagline" content={data.producthunt} id="ph" copied={copied} onCopy={onCopy} serif onEdit={v => onEdit("producthunt", v)} />
+      {/* Copy all */}
+      <div style={{ marginTop: 12, display: "flex", justifyContent: "flex-end" }}>
+        <CopyBtn
+          text={`Twitter/X:\n${data.twitter}\n\nLinkedIn:\n${data.linkedin}\n\nProduct Hunt:\n${data.producthunt}`}
+          id="all-social" copied={copied} onCopy={onCopy} label="Copy all posts"
+        />
+      </div>
     </div>
   );
 }
 
 // ─── Pitch Tab ────────────────────────────────────────────────────────────────
-function PitchTab({ data, copied, onCopy }: { data: CopyData; copied: string | null; onCopy: (t: string, k: string) => void }) {
+function PitchTab({ data, copied, onCopy, onEdit }: {
+  data: CopyData; copied: string | null;
+  onCopy: (t: string, k: string) => void;
+  onEdit: (field: keyof CopyData, value: string) => void;
+}) {
   return (
     <div>
       <div style={{ border: `1px solid ${BORDER}`, padding: "64px 32px", textAlign: "center", marginBottom: -1 }}>
-        <p style={{ color: MUTED, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.15em", marginBottom: 24 }}>
-          Your one-liner
-        </p>
-        <blockquote style={{
-          fontFamily: SERIF, fontSize: "clamp(1.4rem, 3.5vw, 2.4rem)",
-          fontStyle: "italic", color: FG, lineHeight: 1.2, marginBottom: 32,
-        }}>
+        <p style={{ color: MUTED, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.15em", marginBottom: 24 }}>Your one-liner</p>
+        <blockquote style={{ fontFamily: SERIF, fontSize: "clamp(1.4rem, 3.5vw, 2.4rem)", fontStyle: "italic", color: FG, lineHeight: 1.2, marginBottom: 32 }}>
           &ldquo;{data.pitch}&rdquo;
         </blockquote>
-        <button
-          onClick={() => onCopy(data.pitch, "pitch-main")}
-          style={{
-            display: "inline-flex", alignItems: "center", gap: 8,
-            border: `1px solid ${FG}`, background: "none", color: FG,
-            padding: "10px 24px", fontSize: 13, cursor: "pointer", fontFamily: MONO,
-            transition: "background 0.15s, color 0.15s",
-          }}
+        <button onClick={() => onCopy(data.pitch, "pitch-main")}
+          style={{ display: "inline-flex", alignItems: "center", gap: 8, border: `1px solid ${FG}`, background: "none", color: FG, padding: "10px 24px", fontSize: 13, cursor: "pointer", fontFamily: MONO, transition: "background 0.15s, color 0.15s" }}
           onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = FG; (e.currentTarget as HTMLButtonElement).style.color = BG; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "none"; (e.currentTarget as HTMLButtonElement).style.color = FG; }}
-        >
+          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "none"; (e.currentTarget as HTMLButtonElement).style.color = FG; }}>
           {copied === "pitch-main" ? <Check size={14} /> : <Copy size={14} />}
           {copied === "pitch-main" ? "Copied!" : "Copy this line"}
         </button>
       </div>
-
-      <Block label="Tagline" content={data.tagline} id="tl-p" copied={copied} onCopy={onCopy} serif />
-      <Block label="Product Hunt" content={data.producthunt} id="ph-p" copied={copied} onCopy={onCopy} />
-
-      <div style={{ border: `1px solid ${BORDER}`, padding: "20px 20px", marginTop: -1 }}>
-        <p style={{ color: MUTED, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 14 }}>
-          Use this line for
-        </p>
+      <Block label="Pitch (edit)"   content={data.pitch}       id="pitch-e" copied={copied} onCopy={onCopy} serif onEdit={v => onEdit("pitch", v)} />
+      <Block label="Tagline"        content={data.tagline}     id="tl-p"    copied={copied} onCopy={onCopy} serif onEdit={v => onEdit("tagline", v)} />
+      <Block label="Product Hunt"   content={data.producthunt} id="ph-p"    copied={copied} onCopy={onCopy}       onEdit={v => onEdit("producthunt", v)} />
+      <div style={{ border: `1px solid ${BORDER}`, padding: "20px", marginTop: -1 }}>
+        <p style={{ color: MUTED, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 14 }}>Use this line for</p>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 8 }}>
           {["Twitter bio", "GitHub description", "Email signature", "Product Hunt"].map((u, i) => (
             <div key={i} style={{ border: `1px solid ${BORDER}`, padding: "10px 14px", textAlign: "center" }}>
@@ -591,49 +556,73 @@ function PitchTab({ data, copied, onCopy }: { data: CopyData; copied: string | n
   );
 }
 
-// ─── Shared: Block ────────────────────────────────────────────────────────────
-function Block({ label, content, id, copied, onCopy, serif = false, large = false }: {
+// ─── Block (editable) ─────────────────────────────────────────────────────────
+function Block({ label, content, id, copied, onCopy, serif = false, large = false, onEdit }: {
   label: string; content: string; id: string;
   copied: string | null; onCopy: (t: string, k: string) => void;
   serif?: boolean; large?: boolean;
+  onEdit?: (value: string) => void;
 }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(content);
+  useEffect(() => { setDraft(content); }, [content]);
+
+  function saveEdit() { if (onEdit) onEdit(draft); setEditing(false); }
+  function cancelEdit() { setDraft(content); setEditing(false); }
+
+  const fontSize = serif ? 16 : large ? 13 : 12;
+
   return (
     <div style={{ border: `1px solid ${BORDER}`, marginTop: -1 }}>
-      <div style={{
-        padding: "8px 14px", borderBottom: `1px solid ${BORDER}`,
-        background: SURFACE, display: "flex", justifyContent: "space-between", alignItems: "center",
-      }}>
+      <div style={{ padding: "8px 14px", borderBottom: `1px solid ${BORDER}`, background: SURFACE, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <span style={{ color: MUTED, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.1em" }}>{label}</span>
-        <CopyBtn text={content} id={id} copied={copied} onCopy={onCopy} />
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          {onEdit && !editing && (
+            <button onClick={() => setEditing(true)} style={{ display: "flex", alignItems: "center", gap: 4, background: "none", border: `1px solid ${BORDER}`, color: MUTED, fontSize: 11, cursor: "pointer", padding: "3px 9px", fontFamily: MONO, transition: "color 0.15s, border-color 0.15s" }}
+              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = FG; (e.currentTarget as HTMLButtonElement).style.borderColor = FG; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = MUTED; (e.currentTarget as HTMLButtonElement).style.borderColor = BORDER; }}>
+              <Pencil size={10} /> Edit
+            </button>
+          )}
+          {editing ? (
+            <div style={{ display: "flex", gap: 4 }}>
+              <button onClick={saveEdit} style={{ display: "flex", alignItems: "center", gap: 4, background: FG, color: BG, border: "none", fontSize: 11, cursor: "pointer", padding: "3px 9px", fontFamily: MONO }}>
+                <Check size={10} /> Save
+              </button>
+              <button onClick={cancelEdit} style={{ display: "flex", alignItems: "center", background: "none", border: `1px solid ${BORDER}`, color: MUTED, fontSize: 11, cursor: "pointer", padding: "3px 7px", fontFamily: MONO }}>
+                <X size={10} />
+              </button>
+            </div>
+          ) : (
+            <CopyBtn text={content} id={id} copied={copied} onCopy={onCopy} />
+          )}
+        </div>
       </div>
-      <div style={{
-        padding: "14px 16px", color: FG, lineHeight: 1.65, whiteSpace: "pre-wrap",
-        fontFamily: serif ? SERIF : MONO,
-        fontSize: serif ? 16 : large ? 13 : 12,
-      }}>
-        {content}
-      </div>
+      {editing ? (
+        <textarea
+          autoFocus value={draft} onChange={e => setDraft(e.target.value)}
+          onKeyDown={e => { if (e.key === "Escape") cancelEdit(); if (e.key === "Enter" && e.metaKey) saveEdit(); }}
+          style={{ width: "100%", background: "#0c0c0c", color: FG, border: "none", padding: "14px 16px", fontSize, fontFamily: serif ? SERIF : MONO, lineHeight: 1.65, resize: "vertical", minHeight: 80, outline: "none", boxSizing: "border-box" }}
+        />
+      ) : (
+        <div style={{ padding: "14px 16px", color: FG, lineHeight: 1.65, whiteSpace: "pre-wrap", fontFamily: serif ? SERIF : MONO, fontSize }}>
+          {content}
+        </div>
+      )}
     </div>
   );
 }
 
-// ─── Shared: CopyBtn ──────────────────────────────────────────────────────────
+// ─── CopyBtn ──────────────────────────────────────────────────────────────────
 function CopyBtn({ text, id, copied, onCopy, label = "Copy" }: {
   text: string; id: string; copied: string | null;
   onCopy: (t: string, k: string) => void; label?: string;
 }) {
   const done = copied === id;
   return (
-    <button onClick={() => onCopy(text, id)}
-      style={{
-        display: "flex", alignItems: "center", gap: 5,
-        background: "none", border: `1px solid ${BORDER}`,
-        color: done ? FG : MUTED, fontSize: 11, cursor: "pointer",
-        padding: "4px 10px", fontFamily: MONO, transition: "color 0.15s, border-color 0.15s",
-      }}
+    <button onClick={() => onCopy(text, id)} style={{ display: "flex", alignItems: "center", gap: 5, background: "none", border: `1px solid ${BORDER}`, color: done ? FG : MUTED, fontSize: 11, cursor: "pointer", padding: "4px 10px", fontFamily: MONO, transition: "color 0.15s, border-color 0.15s" }}
       onMouseEnter={e => { if (!done) { (e.currentTarget as HTMLButtonElement).style.color = FG; (e.currentTarget as HTMLButtonElement).style.borderColor = FG; }}}
-      onMouseLeave={e => { if (!done) { (e.currentTarget as HTMLButtonElement).style.color = MUTED; (e.currentTarget as HTMLButtonElement).style.borderColor = BORDER; }}}
-    >
+      onMouseLeave={e => { if (!done) { (e.currentTarget as HTMLButtonElement).style.color = MUTED; (e.currentTarget as HTMLButtonElement).style.borderColor = BORDER; }}}>
       {done ? <Check size={11} /> : <Copy size={11} />}
       {done ? "Copied!" : label}
     </button>
@@ -641,9 +630,10 @@ function CopyBtn({ text, id, copied, onCopy, label = "Copy" }: {
 }
 
 // ─── GitHub Modal ─────────────────────────────────────────────────────────────
-function GitHubModal({ repoName, setRepoName, token, setToken, loading, result, error, onClose, onSubmit }: {
+function GitHubModal({ repoName, setRepoName, token, setToken, savedToken, onDisconnect, loading, result, error, onClose, onSubmit }: {
   repoName: string; setRepoName: (v: string) => void;
   token: string; setToken: (v: string) => void;
+  savedToken: string; onDisconnect: () => void;
   loading: boolean; result: GhResult | null; error: string | null;
   onClose: () => void; onSubmit: () => void;
 }) {
@@ -651,141 +641,98 @@ function GitHubModal({ repoName, setRepoName, token, setToken, loading, result, 
 
   const deployOptions = result ? [
     { label: "Deploy to Netlify", url: result.netlifyUrl, desc: "Import the repo and deploy. Free tier.", icon: "◆" },
-    { label: "GitHub Pages", url: result.pagesUrl, desc: "Enable Pages in repo settings.", icon: "⬡" },
+    { label: "GitHub Pages",      url: result.pagesUrl,   desc: "Enable Pages in repo settings.",       icon: "⬡" },
   ] : [];
 
+  const hasSaved = !!savedToken;
+  const tokenPreview = savedToken ? `...${savedToken.slice(-8)}` : "";
+
   return (
-    <div style={{
-      position: "fixed", inset: 0, zIndex: 100,
-      display: "flex", alignItems: "center", justifyContent: "center",
-      padding: 16, background: "rgba(0,0,0,0.88)",
-    }}>
+    <div style={{ position: "fixed", inset: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, background: "rgba(0,0,0,0.88)" }}>
       <div style={{ width: "100%", maxWidth: 480, border: `1px solid ${BORDER}`, background: BG }}>
-        <div style={{
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-          padding: "14px 20px", borderBottom: `1px solid ${BORDER}`,
-        }}>
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 20px", borderBottom: `1px solid ${BORDER}` }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <GithubIcon size={15} color={FG} />
-            <span style={{ fontFamily: SERIF, fontSize: 17, fontWeight: 500, color: FG }}>
-              {result ? "Repo Created" : "Push to GitHub"}
-            </span>
+            <span style={{ fontFamily: SERIF, fontSize: 17, fontWeight: 500, color: FG }}>{result ? "Repo Created" : "Push to GitHub"}</span>
           </div>
-          <button onClick={onClose}
-            style={{ background: "none", border: "none", color: MUTED, fontSize: 20, cursor: "pointer", lineHeight: 1 }}>
-            ×
-          </button>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: MUTED, fontSize: 20, cursor: "pointer", lineHeight: 1 }}>×</button>
         </div>
 
         <div style={{ padding: 20 }}>
           {!result ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {/* Fix 3: Token field with saved-token indicator */}
               <div>
-                <label style={{ color: MUTED, fontSize: 11, display: "block", marginBottom: 6 }}>
-                  GitHub Personal Access Token
-                </label>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                  <label style={{ color: MUTED, fontSize: 11 }}>GitHub Personal Access Token</label>
+                  {hasSaved && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ color: GOLD, fontSize: 10, display: "flex", alignItems: "center", gap: 4 }}>
+                        <Check size={9} /> Saved {tokenPreview}
+                      </span>
+                      <button onClick={onDisconnect} style={{ color: MUTED, fontSize: 10, background: "none", border: "none", cursor: "pointer", fontFamily: MONO, textDecoration: "underline" }}>
+                        Remove
+                      </button>
+                    </div>
+                  )}
+                </div>
                 <input
-                  type="password" value={token}
-                  onChange={e => setToken(e.target.value)}
-                  placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
-                  style={{
-                    width: "100%", padding: "10px 14px", fontSize: 12,
-                    background: SURFACE, color: FG, border: `1px solid ${BORDER}`,
-                    outline: "none", fontFamily: MONO, boxSizing: "border-box",
-                  }}
+                  type="password" value={token} onChange={e => setToken(e.target.value)}
+                  placeholder={hasSaved ? `Using saved token (${tokenPreview})` : "ghp_xxxxxxxxxxxxxxxxxxxx"}
+                  style={{ width: "100%", padding: "10px 14px", fontSize: 12, background: SURFACE, color: FG, border: `1px solid ${hasSaved ? GOLD : BORDER}`, outline: "none", fontFamily: MONO, boxSizing: "border-box" }}
                 />
-                <p style={{ color: DIM, fontSize: 11, marginTop: 6 }}>
-                  Need one?{" "}
-                  <a href="https://github.com/settings/tokens/new?scopes=repo&description=LaunchKit"
-                    target="_blank" rel="noreferrer"
-                    style={{ color: MUTED, textDecoration: "underline" }}>
-                    Generate here
-                  </a>
-                  {" "}— check <code style={{ fontSize: 10 }}>repo</code> scope.
-                </p>
+                {!hasSaved && (
+                  <p style={{ color: DIM, fontSize: 11, marginTop: 6 }}>
+                    Need one?{" "}
+                    <a href="https://github.com/settings/tokens/new?scopes=repo&description=LaunchKit" target="_blank" rel="noreferrer" style={{ color: MUTED, textDecoration: "underline" }}>Generate here</a>
+                    {" "}— check <code style={{ fontSize: 10 }}>repo</code> scope. Token is saved after first use.
+                  </p>
+                )}
               </div>
 
               <div>
-                <label style={{ color: MUTED, fontSize: 11, display: "block", marginBottom: 6 }}>
-                  Repository Name
-                </label>
-                <input
-                  type="text" value={repoName}
-                  onChange={e => setRepoName(e.target.value)}
-                  placeholder="my-product-landing"
-                  style={{
-                    width: "100%", padding: "10px 14px", fontSize: 12,
-                    background: SURFACE, color: FG, border: `1px solid ${BORDER}`,
-                    outline: "none", fontFamily: MONO, boxSizing: "border-box",
-                  }}
-                />
+                <label style={{ color: MUTED, fontSize: 11, display: "block", marginBottom: 6 }}>Repository Name</label>
+                <input type="text" value={repoName} onChange={e => setRepoName(e.target.value)} placeholder="my-product-landing"
+                  style={{ width: "100%", padding: "10px 14px", fontSize: 12, background: SURFACE, color: FG, border: `1px solid ${BORDER}`, outline: "none", fontFamily: MONO, boxSizing: "border-box" }} />
               </div>
 
-              {error && (
-                <p style={{ color: "#ff6b6b", fontSize: 11, border: "1px solid #4a1a1a", padding: "8px 12px" }}>
-                  {error}
-                </p>
-              )}
+              {error && <p style={{ color: "#ff6b6b", fontSize: 11, border: "1px solid #4a1a1a", padding: "8px 12px" }}>{error}</p>}
 
-              <button
-                onClick={onSubmit}
-                disabled={loading || !token || !repoName}
-                style={{
-                  width: "100%", padding: "12px", fontSize: 13, fontWeight: 500,
-                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                  background: FG, color: BG, border: "none",
-                  cursor: loading || !token || !repoName ? "not-allowed" : "pointer",
-                  opacity: loading || !token || !repoName ? 0.5 : 1,
-                  fontFamily: MONO,
-                }}>
+              <button onClick={onSubmit} disabled={loading || !token || !repoName}
+                style={{ width: "100%", padding: "12px", fontSize: 13, fontWeight: 500, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: FG, color: BG, border: "none", cursor: loading || !token || !repoName ? "not-allowed" : "pointer", opacity: loading || !token || !repoName ? 0.5 : 1, fontFamily: MONO }}>
                 {loading ? <Loader2 size={14} className="animate-spin" /> : <GithubIcon size={14} />}
                 {loading ? "Creating repo..." : "Create repo & push files"}
               </button>
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              {/* Repo created */}
               <div style={{ border: `1px solid ${BORDER}`, padding: "12px 14px" }}>
                 <p style={{ color: MUTED, fontSize: 11, marginBottom: 6 }}>Repository created</p>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <p style={{ color: FG, fontSize: 13, fontFamily: MONO }}>{result.fullName}</p>
-                  <a href={result.repoUrl} target="_blank" rel="noreferrer"
-                    style={{ display: "flex", alignItems: "center", gap: 5, color: MUTED, fontSize: 11, textDecoration: "none" }}>
-                    <ExternalLink size={12} />
-                    Open
+                  <a href={result.repoUrl} target="_blank" rel="noreferrer" style={{ display: "flex", alignItems: "center", gap: 5, color: MUTED, fontSize: 11, textDecoration: "none" }}>
+                    <ExternalLink size={12} /> Open
                   </a>
                 </div>
               </div>
 
-              {/* Deploy instructions */}
-              <div style={{ border: `1px solid ${BORDER}`, padding: "14px 14px" }}>
-                <p style={{ color: MUTED, fontSize: 11, marginBottom: 12, textTransform: "uppercase", letterSpacing: "0.1em" }}>
-                  Deploy to Vercel
-                </p>
+              <div style={{ border: `1px solid ${BORDER}`, padding: "14px" }}>
+                <p style={{ color: MUTED, fontSize: 11, marginBottom: 12, textTransform: "uppercase", letterSpacing: "0.1em" }}>Deploy to Vercel</p>
                 <ol style={{ color: FG, fontSize: 12, lineHeight: 2, margin: 0, paddingLeft: 16 }}>
                   <li>Go to <a href="https://vercel.com/new" target="_blank" rel="noreferrer" style={{ color: FG, textDecoration: "underline" }}>vercel.com/new</a></li>
                   <li>Click <strong>Import Git Repository</strong></li>
-                  <li>Select <code style={{ fontFamily: MONO, fontSize: 11, color: FG }}>{result.fullName}</code></li>
+                  <li>Select <code style={{ fontFamily: MONO, fontSize: 11 }}>{result.fullName}</code></li>
                   <li>Framework: <strong>Vite</strong> — Deploy</li>
                 </ol>
               </div>
 
-              {/* Other options */}
-              <p style={{ color: MUTED, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.1em" }}>
-                Other options
-              </p>
+              <p style={{ color: MUTED, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.1em" }}>Other options</p>
               <div>
                 {deployOptions.map((d, i) => (
                   <a key={i} href={d.url} target="_blank" rel="noreferrer"
-                    style={{
-                      display: "flex", alignItems: "center", justifyContent: "space-between",
-                      border: `1px solid ${hoveredDeploy === i ? FG : BORDER}`, padding: "12px 14px",
-                      marginTop: i > 0 ? -1 : 0, textDecoration: "none",
-                      transition: "border-color 0.15s",
-                    }}
-                    onMouseEnter={() => setHoveredDeploy(i)}
-                    onMouseLeave={() => setHoveredDeploy(null)}
-                  >
+                    style={{ display: "flex", alignItems: "center", justifyContent: "space-between", border: `1px solid ${hoveredDeploy === i ? FG : BORDER}`, padding: "12px 14px", marginTop: i > 0 ? -1 : 0, textDecoration: "none", transition: "border-color 0.15s" }}
+                    onMouseEnter={() => setHoveredDeploy(i)} onMouseLeave={() => setHoveredDeploy(null)}>
                     <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                       <span style={{ color: FG, fontSize: 13, width: 18, textAlign: "center" }}>{d.icon}</span>
                       <div>

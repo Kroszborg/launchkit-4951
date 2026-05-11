@@ -7,7 +7,7 @@ import dedent from "dedent";
 export const maxDuration = 60;
 
 export async function POST(request: Request) {
-  const { description, repoMeta } = await request.json();
+  const { description, repoMeta, tone = "startup" } = await request.json();
 
   const repoUrl = repoMeta?.repoUrl || null;
 
@@ -30,8 +30,14 @@ export async function POST(request: Request) {
       `
     : `Product description: ${description}`;
 
+  const toneGuide: Record<string, string> = {
+    startup:    "Write like a founder shipping their first product — conversational, punchy, direct. No corporate speak.",
+    technical:  "Write for developers and engineers. Be precise and specific. Mention real technical capabilities. Avoid vague marketing adjectives.",
+    enterprise: "Write for enterprise buyers. Professional, ROI-focused, trust-building. Emphasise reliability, scale, and measurable outcomes.",
+  };
+
   const systemPrompt = dedent`
-    You are a world-class product launch copywriter. Write like a senior PM who ships.
+    You are a world-class product launch copywriter. ${toneGuide[tone] || toneGuide.startup}
     No em-dashes. No fluffy adjectives. No vague promises.
 
     CRITICAL: Base ALL copy strictly on the product information provided. Every claim, feature, and
