@@ -8,255 +8,415 @@ function esc(s: unknown): string {
 }
 
 export function buildLandingTemplate(d: CopyData): string {
-  const name = esc(d.name || "Product");
-  const headline = esc(d.headline || "Build something great");
+  const name        = esc(d.name        || "Product");
+  const headline    = esc(d.headline    || "Build something great");
   const subheadline = esc(d.subheadline || "");
-  const tagline = esc(d.tagline || "");
-  const cta = esc(d.cta || "Get Started");
-  const ctaUrl = esc(d.ctaUrl || "https://github.com");
+  const tagline     = esc(d.tagline     || "");
+  const pitch       = esc(d.pitch       || "");
+  const cta         = esc(d.cta         || "Get Started");
+  const ctaUrl      = esc(d.ctaUrl      || "https://github.com");
 
   const rawFeatures = (d.features || []).slice(0, 3);
   while (rawFeatures.length < 3)
     rawFeatures.push({ num: `0${rawFeatures.length + 1}`, title: "Feature", desc: "More details coming soon." });
   const features = rawFeatures.map((f) => ({
-    num: esc(f.num || "01"),
-    title: esc(f.title || ""),
-    desc: esc(f.desc || ""),
+    num: esc(f.num || "01"), title: esc(f.title || ""), desc: esc(f.desc || ""),
   }));
 
   const rawSteps = (d.steps || []).slice(0, 3);
   while (rawSteps.length < 3)
     rawSteps.push({ num: `${rawSteps.length + 1}`, title: "Step", desc: "Coming soon." });
   const steps = rawSteps.map((s) => ({
-    num: esc(s.num || "1"),
-    title: esc(s.title || ""),
-    desc: esc(s.desc || ""),
+    num: esc(s.num || "1"), title: esc(s.title || ""), desc: esc(s.desc || ""),
   }));
 
-  const words = headline.split(" ");
-  const mid = Math.ceil(words.length / 2);
+  const words    = headline.split(" ");
+  const mid      = Math.ceil(words.length / 2);
   const headline1 = words.slice(0, mid).join(" ");
   const headline2 = words.slice(mid).join(" ");
 
   const featuresJson = JSON.stringify(features);
-  const stepsJson = JSON.stringify(steps);
+  const stepsJson    = JSON.stringify(steps);
 
-  const lines: string[] = [];
+  const L: string[] = [];
+  const p = (...s: string[]) => s.forEach((x) => L.push(x));
 
-  lines.push("const LandingPage = () => {");
-  lines.push('  const SERIF = "\'Playfair Display\', Georgia, serif";');
-  lines.push('  const MONO  = "\'DM Mono\', \'Courier New\', monospace";');
-  lines.push('  const FG    = "#e8e0d0";');
-  lines.push('  const MUTED = "#6b6b6b";');
-  lines.push('  const DIM   = "#2a2a2a";');
-  lines.push('  const BG    = "#0a0a0a";');
-  lines.push('  const SURF  = "#0f0f0f";');
-  lines.push('  const GOLD  = "#c9a96e";');
-  lines.push("");
-  lines.push('  const scrollTo = (id) => { const el = document.getElementById(id); if (el) el.scrollIntoView({ behavior: "smooth" }); };');
-  lines.push("");
-  lines.push("  const features = " + featuresJson + ";");
-  lines.push("  const steps    = " + stepsJson + ";");
-  lines.push("");
-  lines.push("  return (");
-  lines.push('    <div style={{ background: BG, color: FG, fontFamily: MONO, minHeight: "100vh", overflowX: "hidden" }}>');
-  lines.push("");
-  lines.push("      {/* NAV */}");
-  lines.push("      <nav style={{");
-  lines.push('        position: "sticky", top: 0, zIndex: 50,');
-  lines.push('        background: "rgba(10,10,10,0.92)", backdropFilter: "blur(12px)",');
-  lines.push("        borderBottom: `1px solid ${DIM}`, padding: \"0 48px\", height: 64,");
-  lines.push('        display: "flex", alignItems: "center", justifyContent: "space-between"');
-  lines.push("      }}>");
-  lines.push('        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>');
-  lines.push('          <div style={{ width: 8, height: 8, background: GOLD, borderRadius: "50%" }} />');
-  lines.push('          <span style={{ fontFamily: SERIF, fontSize: 18, fontWeight: 600, letterSpacing: "-0.02em" }}>');
-  lines.push("            " + JSON.stringify(name));
-  lines.push("          </span>");
-  lines.push("        </div>");
-  lines.push('        <div style={{ display: "flex", alignItems: "center", gap: 40 }}>');
-  lines.push('          <span onClick={() => scrollTo("features")} style={{ color: MUTED, fontSize: 12, cursor: "pointer", letterSpacing: "0.04em" }}>Features</span>');
-  lines.push('          <span onClick={() => scrollTo("how")} style={{ color: MUTED, fontSize: 12, cursor: "pointer", letterSpacing: "0.04em" }}>How it works</span>');
-  lines.push("          <button onClick={() => window.open(" + JSON.stringify(ctaUrl) + ', "_blank")} style={{');
-  lines.push('            background: FG, color: BG, border: "none", cursor: "pointer",');
-  lines.push('            padding: "9px 22px", fontSize: 12, fontFamily: MONO, fontWeight: 600, letterSpacing: "0.04em"');
-  lines.push("          }}>");
-  lines.push("            " + JSON.stringify(cta));
-  lines.push("          </button>");
-  lines.push("        </div>");
-  lines.push("      </nav>");
-  lines.push("");
-  lines.push("      {/* HERO */}");
-  lines.push('      <section style={{ position: "relative", overflow: "hidden" }}>');
-  lines.push("        <div style={{");
-  lines.push('          position: "absolute", inset: 0, zIndex: 0,');
-  lines.push('          backgroundImage: "linear-gradient(rgba(42,42,42,0.25) 1px, transparent 1px), linear-gradient(90deg, rgba(42,42,42,0.25) 1px, transparent 1px)",');
-  lines.push('          backgroundSize: "64px 64px",');
-  lines.push('          WebkitMaskImage: "linear-gradient(to bottom, transparent, black 20%, black 60%, transparent)",');
-  lines.push('          maskImage: "linear-gradient(to bottom, transparent, black 20%, black 60%, transparent)"');
-  lines.push("        }} />");
-  lines.push("        <div style={{");
-  lines.push('          position: "absolute", top: -200, left: "50%", transform: "translateX(-50%)",');
-  lines.push('          width: 700, height: 700, borderRadius: "50%",');
-  lines.push('          background: "radial-gradient(circle, rgba(201,169,110,0.06) 0%, transparent 70%)", zIndex: 0');
-  lines.push("        }} />");
-  lines.push('        <div style={{ position: "relative", zIndex: 1, maxWidth: 1100, margin: "0 auto", padding: "140px 48px 120px" }}>');
-  lines.push('          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 44 }}>');
-  lines.push('            <div style={{ width: 32, height: 1, background: GOLD }} />');
-  lines.push('            <span style={{ color: GOLD, fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", fontWeight: 500 }}>');
-  lines.push("              " + JSON.stringify(tagline));
-  lines.push("            </span>");
-  lines.push("          </div>");
-  lines.push("          <h1 style={{");
-  lines.push("            fontFamily: SERIF, fontWeight: 700, lineHeight: 1.0,");
-  lines.push('            fontSize: "clamp(3.2rem, 6.5vw, 7rem)", letterSpacing: "-0.04em",');
-  lines.push('            margin: "0 0 8px 0", maxWidth: 880');
-  lines.push("          }}>");
-  lines.push("            " + JSON.stringify(headline1));
-  lines.push("          </h1>");
-  lines.push("          <h1 style={{");
-  lines.push('            fontFamily: SERIF, fontWeight: 700, fontStyle: "italic", lineHeight: 1.0,');
-  lines.push('            fontSize: "clamp(3.2rem, 6.5vw, 7rem)", letterSpacing: "-0.04em",');
-  lines.push('            margin: "0 0 48px 0", maxWidth: 880, color: "#c8bfaf"');
-  lines.push("          }}>");
-  lines.push("            " + JSON.stringify(headline2));
-  lines.push("          </h1>");
-  lines.push('          <div style={{ display: "flex", alignItems: "flex-end", gap: 80, flexWrap: "wrap" }}>');
-  lines.push('            <p style={{ color: MUTED, fontSize: 15, lineHeight: 1.8, maxWidth: 420, margin: 0 }}>');
-  lines.push("              " + JSON.stringify(subheadline));
-  lines.push("            </p>");
-  lines.push('            <div style={{ display: "flex", flexDirection: "column", gap: 12, flexShrink: 0 }}>');
-  lines.push("              <button onClick={() => window.open(" + JSON.stringify(ctaUrl) + ', "_blank")} style={{');
-  lines.push('                background: FG, color: BG, border: "none", cursor: "pointer",');
-  lines.push('                padding: "16px 40px", fontSize: 13, fontFamily: MONO, fontWeight: 600,');
-  lines.push('                letterSpacing: "0.06em", whiteSpace: "nowrap"');
-  lines.push("              }}>");
-  lines.push("                {" + JSON.stringify(cta + " →") + "}");
-  lines.push("              </button>");
-  lines.push('              <span style={{ color: MUTED, fontSize: 11, textAlign: "center", letterSpacing: "0.04em" }}>');
-  lines.push("                Free to use. No account needed.");
-  lines.push("              </span>");
-  lines.push("            </div>");
-  lines.push("          </div>");
-  lines.push("        </div>");
-  lines.push("        <div style={{ borderTop: `1px solid ${DIM}` }}>");
-  lines.push('          <div style={{ maxWidth: 1100, margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 48px" }}>');
-  lines.push('            <span style={{ color: MUTED, fontSize: 11, letterSpacing: "0.12em" }}>SCROLL TO EXPLORE</span>');
-  lines.push('            <span style={{ color: DIM, fontSize: 11 }}>↓</span>');
-  lines.push("          </div>");
-  lines.push("        </div>");
-  lines.push("      </section>");
-  lines.push("");
-  lines.push('      {/* FEATURES */}');
-  lines.push('      <section id="features" style={{ background: SURF }}>');
-  lines.push('        <div style={{ maxWidth: 1100, margin: "0 auto", padding: "80px 48px" }}>');
-  lines.push('          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 56 }}>');
-  lines.push('            <p style={{ color: MUTED, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.2em", margin: 0 }}>What you get</p>');
-  lines.push('            <span style={{ color: DIM, fontSize: 11 }}>03 features</span>');
-  lines.push("          </div>");
-  lines.push('          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 0 }}>');
-  lines.push("            {features.map((f, i) => (");
-  lines.push("              <div key={i} style={{");
-  lines.push('                padding: "40px 36px 44px",');
-  lines.push("                borderTop: `1px solid ${DIM}`, borderBottom: `1px solid ${DIM}`,");
-  lines.push("                borderLeft: `1px solid ${DIM}`,");
-  lines.push('                borderRight: i === 2 ? `1px solid ${DIM}` : "none",');
-  lines.push('                position: "relative"');
-  lines.push("              }}>");
-  lines.push("                <div style={{");
-  lines.push("                  fontFamily: SERIF, fontSize: 80, fontWeight: 700,");
-  lines.push('                  color: "rgba(42,42,42,0.6)", position: "absolute",');
-  lines.push("                  top: 16, right: 20, lineHeight: 1, userSelect: \"none\"");
-  lines.push("                }}>{f.num}</div>");
-  lines.push('                <div style={{ width: 28, height: 2, background: GOLD, marginBottom: 28 }} />');
-  lines.push('                <h3 style={{ fontFamily: SERIF, fontSize: 21, fontWeight: 600, marginBottom: 14, lineHeight: 1.2, maxWidth: 200 }}>{f.title}</h3>');
-  lines.push('                <p style={{ color: MUTED, fontSize: 13, lineHeight: 1.75, margin: 0 }}>{f.desc}</p>');
-  lines.push("              </div>");
-  lines.push("            ))}");
-  lines.push("          </div>");
-  lines.push("        </div>");
-  lines.push("      </section>");
-  lines.push("");
-  lines.push("      {/* HOW IT WORKS */}");
-  lines.push('      <section id="how" style={{ borderTop: `1px solid ${DIM}` }}>');
-  lines.push('        <div style={{ maxWidth: 1100, margin: "0 auto", padding: "80px 48px" }}>');
-  lines.push('          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 64 }}>');
-  lines.push('            <p style={{ color: MUTED, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.2em", margin: 0 }}>How it works</p>');
-  lines.push("          </div>");
-  lines.push('          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 48 }}>');
-  lines.push("            {steps.map((s, i) => (");
-  lines.push('              <div key={i} style={{ display: "flex", flexDirection: "column" }}>');
-  lines.push('                <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 28 }}>');
-  lines.push("                  <div style={{");
-  lines.push("                    width: 40, height: 40, border: `1px solid ${DIM}`,");
-  lines.push('                    display: "flex", alignItems: "center", justifyContent: "center",');
-  lines.push('                    fontFamily: SERIF, fontSize: 16, color: GOLD, flexShrink: 0');
-  lines.push("                  }}>{s.num}</div>");
-  lines.push('                  {i < 2 && <div style={{ flex: 1, height: 1, background: `linear-gradient(90deg, ${DIM}, transparent)` }} />}');
-  lines.push("                </div>");
-  lines.push('                <h4 style={{ fontFamily: SERIF, fontSize: 19, fontWeight: 600, marginBottom: 12, lineHeight: 1.2 }}>{s.title}</h4>');
-  lines.push('                <p style={{ color: MUTED, fontSize: 13, lineHeight: 1.75, margin: 0 }}>{s.desc}</p>');
-  lines.push("              </div>");
-  lines.push("            ))}");
-  lines.push("          </div>");
-  lines.push("        </div>");
-  lines.push("      </section>");
-  lines.push("");
-  lines.push("      {/* CTA BAND */}");
-  lines.push("      <section style={{");
-  lines.push("        borderTop: `1px solid ${DIM}`,");
-  lines.push('        background: "linear-gradient(135deg, #0f0e0c 0%, #0a0a0a 50%, #0d0c0a 100%)",');
-  lines.push('        position: "relative", overflow: "hidden"');
-  lines.push("      }}>");
-  lines.push("        <div style={{");
-  lines.push('          position: "absolute", top: -100, right: -100, width: 400, height: 400, borderRadius: "50%",');
-  lines.push('          background: "radial-gradient(circle, rgba(201,169,110,0.05) 0%, transparent 70%)"');
-  lines.push("        }} />");
-  lines.push("        <div style={{");
-  lines.push('          maxWidth: 1100, margin: "0 auto", padding: "100px 48px",');
-  lines.push('          display: "flex", alignItems: "center", justifyContent: "space-between",');
-  lines.push('          gap: 48, position: "relative", zIndex: 1');
-  lines.push("        }}>");
-  lines.push("          <div>");
-  lines.push('            <p style={{ color: GOLD, fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", marginBottom: 20 }}>Ready to ship?</p>');
-  lines.push("            <h2 style={{");
-  lines.push("              fontFamily: SERIF, fontWeight: 700, lineHeight: 1.05,");
-  lines.push('              fontSize: "clamp(2.2rem, 4.5vw, 4rem)", letterSpacing: "-0.03em", margin: 0, maxWidth: 560');
-  lines.push("            }}>");
-  lines.push("              Stop waiting.<br/>");
-  lines.push('              <em style={{ fontStyle: "italic", color: "#c8bfaf" }}>Start launching.</em>');
-  lines.push("            </h2>");
-  lines.push("          </div>");
-  lines.push('          <div style={{ display: "flex", flexDirection: "column", gap: 14, alignItems: "flex-end", flexShrink: 0 }}>');
-  lines.push("            <button onClick={() => window.open(" + JSON.stringify(ctaUrl) + ', "_blank")} style={{');
-  lines.push('              background: FG, color: BG, border: "none", cursor: "pointer",');
-  lines.push('              padding: "18px 48px", fontSize: 14, fontFamily: MONO, fontWeight: 600,');
-  lines.push('              letterSpacing: "0.06em", whiteSpace: "nowrap"');
-  lines.push("            }}>");
-  lines.push("              {" + JSON.stringify(cta + " →") + "}");
-  lines.push("            </button>");
-  lines.push('            <span style={{ color: MUTED, fontSize: 11 }}>Free · No signup · Instant results</span>');
-  lines.push("          </div>");
-  lines.push("        </div>");
-  lines.push("      </section>");
-  lines.push("");
-  lines.push("      {/* FOOTER */}");
-  lines.push('      <footer style={{ borderTop: `1px solid ${DIM}`, padding: "28px 48px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>');
-  lines.push('        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>');
-  lines.push('          <div style={{ width: 6, height: 6, background: GOLD, borderRadius: "50%" }} />');
-  lines.push('          <span style={{ fontFamily: SERIF, fontSize: 15, color: MUTED }}>' + JSON.stringify(name) + "</span>");
-  lines.push("        </div>");
-  lines.push('        <span style={{ color: DIM, fontSize: 11, letterSpacing: "0.08em" }}>Built with LaunchKit</span>');
-  lines.push("      </footer>");
-  lines.push("");
-  lines.push("    </div>");
-  lines.push("  );");
-  lines.push("};");
-  lines.push("");
-  lines.push("export default LandingPage;");
+  /* ── component open ─────────────────────────────────────── */
+  p(
+    "const LandingPage = () => {",
+    '  const SERIF = "\'Playfair Display\', Georgia, serif";',
+    '  const MONO  = "\'DM Mono\', \'Courier New\', monospace";',
+    '  const FG    = "#e8e0d0";',
+    '  const MUTED = "#6b6b6b";',
+    '  const DIM   = "#2a2a2a";',
+    '  const BG    = "#0a0a0a";',
+    '  const SURF  = "#0e0e0e";',
+    '  const GOLD  = "#c9a96e";',
+    '  const GOLDF = "rgba(201,169,110,0.08)";',
+    "",
+    "  const features = " + featuresJson + ";",
+    "  const steps    = " + stepsJson + ";",
+    "",
+    "  const scrollTo = (id) => { const el = document.getElementById(id); if (el) el.scrollIntoView({ behavior: 'smooth' }); };",
+    "",
+    "  return (",
+  );
 
-  return lines.join("\n");
+  /* ── wrapper ─────────────────────────────────────────────── */
+  p(
+    '    <div style={{ background: BG, color: FG, fontFamily: MONO, minHeight: "100vh", overflowX: "hidden" }}>',
+    "",
+  );
+
+  /* ── CSS animations ──────────────────────────────────────── */
+  p(
+    "      <style>{`",
+    "        @keyframes fadeUp { from { opacity:0; transform:translateY(22px) } to { opacity:1; transform:translateY(0) } }",
+    "        @keyframes pulse  { 0%,100% { opacity:1 } 50% { opacity:0.4 } }",
+    "        @keyframes borderGlow { 0%,100% { border-color:#2a2a2a } 50% { border-color:rgba(201,169,110,0.5) } }",
+    "        .lk-a  { animation: fadeUp 0.65s ease forwards; opacity:0 }",
+    "        .lk-d1 { animation-delay:0.05s } .lk-d2 { animation-delay:0.15s }",
+    "        .lk-d3 { animation-delay:0.25s } .lk-d4 { animation-delay:0.35s }",
+    "        .lk-d5 { animation-delay:0.45s } .lk-d6 { animation-delay:0.55s }",
+    "        .lk-card { transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease, background 0.25s ease }",
+    "        .lk-card:hover { transform:translateY(-6px) !important; border-color:#c9a96e !important; box-shadow:0 24px 64px rgba(0,0,0,0.7) !important; background:#111 !important }",
+    "        .lk-btn  { transition: background 0.18s ease, transform 0.18s ease, color 0.18s ease }",
+    "        .lk-btn:hover  { background:#ffffff !important; transform:translateY(-2px) !important }",
+    "        .lk-ghost { transition: border-color 0.18s ease, color 0.18s ease }",
+    "        .lk-ghost:hover { border-color:#e8e0d0 !important; color:#e8e0d0 !important }",
+    "        .lk-nav-link { transition: color 0.15s ease; cursor:pointer }",
+    "        .lk-nav-link:hover { color:#e8e0d0 !important }",
+    "        .lk-step-dot { transition: border-color 0.2s, color 0.2s }",
+    "        .lk-step:hover .lk-step-dot { border-color:#c9a96e !important; color:#c9a96e !important }",
+    "        .lk-pulse { animation: pulse 2.5s ease infinite }",
+    "        .lk-border-glow { animation: borderGlow 3s ease infinite }",
+    "      `}</style>",
+    "",
+  );
+
+  /* ── NAV ─────────────────────────────────────────────────── */
+  p(
+    "      {/* NAV */}",
+    "      <nav style={{",
+    '        position:"sticky", top:0, zIndex:50,',
+    '        background:"rgba(10,10,10,0.85)", backdropFilter:"blur(16px)",',
+    "        borderBottom:`1px solid ${DIM}`, padding:\"0 48px\", height:64,",
+    '        display:"flex", alignItems:"center", justifyContent:"space-between"',
+    "      }}>",
+    '        <div style={{ display:"flex", alignItems:"center", gap:10 }}>',
+    '          <div style={{ width:8, height:8, background:GOLD, borderRadius:"50%" }} className="lk-pulse" />',
+    '          <span style={{ fontFamily:SERIF, fontSize:19, fontWeight:700, letterSpacing:"-0.02em" }}>',
+    "            " + JSON.stringify(name),
+    "          </span>",
+    "        </div>",
+    '        <div style={{ display:"flex", alignItems:"center", gap:36 }}>',
+    '          <span className="lk-nav-link" onClick={() => scrollTo("features")} style={{ color:MUTED, fontSize:12, letterSpacing:"0.04em" }}>Features</span>',
+    '          <span className="lk-nav-link" onClick={() => scrollTo("how")}      style={{ color:MUTED, fontSize:12, letterSpacing:"0.04em" }}>How it works</span>',
+    '          <button className="lk-btn" onClick={() => window.open(' + JSON.stringify(ctaUrl) + ', "_blank")} style={{',
+    '            background:FG, color:BG, border:"none", cursor:"pointer",',
+    '            padding:"9px 22px", fontSize:12, fontFamily:MONO, fontWeight:600, letterSpacing:"0.06em"',
+    "          }}>",
+    "            " + JSON.stringify(cta),
+    "          </button>",
+    "        </div>",
+    "      </nav>",
+    "",
+  );
+
+  /* ── HERO ────────────────────────────────────────────────── */
+  p(
+    "      {/* HERO */}",
+    '      <section style={{ position:"relative", overflow:"hidden", minHeight:"92vh", display:"flex", flexDirection:"column", justifyContent:"center" }}>',
+    "",
+    "        {/* grid bg */}",
+    "        <div style={{",
+    '          position:"absolute", inset:0, zIndex:0,',
+    '          backgroundImage:"linear-gradient(rgba(42,42,42,0.2) 1px,transparent 1px),linear-gradient(90deg,rgba(42,42,42,0.2) 1px,transparent 1px)",',
+    '          backgroundSize:"64px 64px",',
+    '          maskImage:"linear-gradient(to bottom,transparent,black 15%,black 65%,transparent)",',
+    '          WebkitMaskImage:"linear-gradient(to bottom,transparent,black 15%,black 65%,transparent)"',
+    "        }} />",
+    "",
+    "        {/* radial glow */}",
+    "        <div style={{",
+    '          position:"absolute", top:"-20%", left:"50%", transform:"translateX(-50%)",',
+    '          width:900, height:900, borderRadius:"50%",',
+    '          background:"radial-gradient(circle,rgba(201,169,110,0.07) 0%,transparent 65%)", zIndex:0',
+    "        }} />",
+    "",
+    '        <div style={{ position:"relative", zIndex:1, maxWidth:1100, margin:"0 auto", padding:"80px 48px 60px", width:"100%" }}>',
+    "",
+    "          {/* badge */}",
+    '          <div className="lk-a lk-d1" style={{ display:"inline-flex", alignItems:"center", gap:8, border:`1px solid rgba(201,169,110,0.35)`, padding:"5px 14px", marginBottom:40, background:"rgba(201,169,110,0.05)" }}>',
+    '            <span className="lk-pulse" style={{ width:6, height:6, borderRadius:"50%", background:GOLD, display:"inline-block" }} />',
+    '            <span style={{ color:GOLD, fontSize:11, letterSpacing:"0.18em", textTransform:"uppercase", fontWeight:500 }}>',
+    "              " + JSON.stringify(tagline),
+    "            </span>",
+    "          </div>",
+    "",
+    "          {/* headline */}",
+    '          <h1 className="lk-a lk-d2" style={{',
+    "            fontFamily:SERIF, fontWeight:700, lineHeight:1.0,",
+    '            fontSize:"clamp(3rem,6.5vw,6.5rem)", letterSpacing:"-0.04em",',
+    '            margin:"0 0 6px", maxWidth:900,',
+    '            background:"linear-gradient(135deg, #e8e0d0 0%, #c9a96e 55%, #e8e0d0 100%)",',
+    '            WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent",',
+    '            backgroundClip:"text"',
+    "          }}>",
+    "            " + JSON.stringify(headline1),
+    "          </h1>",
+    '          <h1 className="lk-a lk-d3" style={{',
+    "            fontFamily:SERIF, fontWeight:700, fontStyle:'italic', lineHeight:1.0,",
+    '            fontSize:"clamp(3rem,6.5vw,6.5rem)", letterSpacing:"-0.04em",',
+    '            margin:"0 0 40px", maxWidth:900, color:"#b8b0a0"',
+    "          }}>",
+    "            " + JSON.stringify(headline2),
+    "          </h1>",
+    "",
+    "          {/* sub + cta row */}",
+    '          <div className="lk-a lk-d4" style={{ display:"flex", alignItems:"flex-end", gap:64, flexWrap:"wrap", marginBottom:56 }}>',
+    '            <p style={{ color:MUTED, fontSize:16, lineHeight:1.85, maxWidth:460, margin:0 }}>',
+    "              " + JSON.stringify(subheadline),
+    "            </p>",
+    '            <div style={{ display:"flex", flexDirection:"column", gap:12, flexShrink:0 }}>',
+    '              <button className="lk-btn" onClick={() => window.open(' + JSON.stringify(ctaUrl) + ', "_blank")} style={{',
+    '                background:FG, color:BG, border:"none", cursor:"pointer",',
+    '                padding:"16px 44px", fontSize:13, fontFamily:MONO, fontWeight:700,',
+    '                letterSpacing:"0.08em", whiteSpace:"nowrap"',
+    "              }}>",
+    "                {" + JSON.stringify(cta + " →") + "}",
+    "              </button>",
+    '              <a className="lk-ghost" href={' + JSON.stringify(ctaUrl) + '} target="_blank" rel="noreferrer" style={{',
+    '                display:"flex", alignItems:"center", justifyContent:"center", gap:6,',
+    '                border:`1px solid ${DIM}`, color:MUTED, textDecoration:"none",',
+    '                padding:"11px 24px", fontSize:12, fontFamily:MONO',
+    "              }}>",
+    '                View on GitHub <span style={{ fontSize:14 }}>↗</span>',
+    "              </a>",
+    "            </div>",
+    "          </div>",
+    "",
+    "          {/* pitch card */}",
+    '          <div className="lk-a lk-d5" style={{',
+    '            border:`1px solid ${DIM}`, borderTop:`2px solid ${GOLD}`,',
+    '            background:SURF, padding:"28px 32px", maxWidth:620,',
+    '            position:"relative"',
+    "          }}>",
+    '            <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:14 }}>',
+    '              <span style={{ fontFamily:MONO, color:GOLD, fontSize:10, letterSpacing:"0.2em", textTransform:"uppercase" }}>One-liner</span>',
+    '              <div style={{ flex:1, height:1, background:`linear-gradient(90deg,${DIM},transparent)` }} />',
+    "            </div>",
+    '            <p style={{ fontFamily:SERIF, fontSize:20, fontStyle:"italic", color:FG, lineHeight:1.4, margin:0 }}>',
+    '              &ldquo;{' + JSON.stringify(pitch) + '}&rdquo;',
+    "            </p>",
+    "          </div>",
+    "",
+    "        </div>",
+    "",
+    "        {/* scroll hint */}",
+    "        <div style={{ borderTop:`1px solid ${DIM}` }}>",
+    '          <div style={{ maxWidth:1100, margin:"0 auto", display:"flex", justifyContent:"space-between", alignItems:"center", padding:"14px 48px" }}>',
+    '            <span style={{ color:"#3a3a3a", fontSize:11, letterSpacing:"0.14em", textTransform:"uppercase" }}>Scroll to explore</span>',
+    '            <span style={{ color:"#3a3a3a", fontSize:14 }}>↓</span>',
+    "          </div>",
+    "        </div>",
+    "      </section>",
+    "",
+  );
+
+  /* ── STATS STRIP ─────────────────────────────────────────── */
+  p(
+    "      {/* STATS */}",
+    "      <section style={{ borderTop:`1px solid ${DIM}`, borderBottom:`1px solid ${DIM}`, background:SURF }}>",
+    '        <div style={{ maxWidth:1100, margin:"0 auto", display:"grid", gridTemplateColumns:"repeat(3,1fr)", padding:"0 48px" }}>',
+    "          {[",
+    '            { label:"Setup time",  value:"< 5 min"   },',
+    '            { label:"Platforms",   value:"Any stack"  },',
+    '            { label:"Cost",        value:"Free"       },',
+    "          ].map((s, i) => (",
+    '            <div key={i} style={{ padding:"28px 0", borderRight: i < 2 ? `1px solid ${DIM}` : "none", paddingLeft: i > 0 ? 40 : 0 }}>',
+    '              <div style={{ fontFamily:SERIF, fontSize:28, fontWeight:700, color:GOLD, marginBottom:4 }}>{s.value}</div>',
+    '              <div style={{ color:MUTED, fontSize:12, letterSpacing:"0.08em" }}>{s.label}</div>',
+    "            </div>",
+    "          ))}",
+    "        </div>",
+    "      </section>",
+    "",
+  );
+
+  /* ── FEATURES ────────────────────────────────────────────── */
+  p(
+    '      {/* FEATURES */}',
+    '      <section id="features" style={{ padding:"100px 48px" }}>',
+    '        <div style={{ maxWidth:1100, margin:"0 auto" }}>',
+    '          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:64 }}>',
+    '            <div>',
+    '              <p style={{ color:GOLD, fontSize:11, letterSpacing:"0.2em", textTransform:"uppercase", marginBottom:8 }}>What you get</p>',
+    '              <h2 style={{ fontFamily:SERIF, fontSize:"clamp(1.8rem,3vw,2.6rem)", fontWeight:700, letterSpacing:"-0.03em", margin:0 }}>',
+    '                Everything you need to launch',
+    '              </h2>',
+    '            </div>',
+    '            <span style={{ color:DIM, fontSize:12, fontFamily:MONO }}>03 features</span>',
+    '          </div>',
+    '          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))", gap:1, background:DIM }}>',
+    "            {features.map((f, i) => (",
+    '              <div key={i} className="lk-card" style={{',
+    '                padding:"44px 36px 48px", background:BG,',
+    '                borderTop:`3px solid ${i === 0 ? GOLD : DIM}`,',
+    '                position:"relative", overflow:"hidden"',
+    "              }}>",
+    "                {/* ghost number */}",
+    "                <div style={{",
+    "                  position:'absolute', bottom:-10, right:16,",
+    "                  fontFamily:SERIF, fontSize:100, fontWeight:700, lineHeight:1,",
+    '                  color:"rgba(201,169,110,0.06)", userSelect:"none", pointerEvents:"none"',
+    "                }}>{f.num}</div>",
+    "",
+    '                <div style={{ width:32, height:2, background:GOLD, marginBottom:32 }} />',
+    '                <h3 style={{ fontFamily:SERIF, fontSize:22, fontWeight:600, marginBottom:12, lineHeight:1.2, position:"relative" }}>{f.title}</h3>',
+    '                <p  style={{ color:MUTED, fontSize:14, lineHeight:1.8, margin:0, position:"relative" }}>{f.desc}</p>',
+    "              </div>",
+    "            ))}",
+    "          </div>",
+    "        </div>",
+    "      </section>",
+    "",
+  );
+
+  /* ── HOW IT WORKS ────────────────────────────────────────── */
+  p(
+    '      {/* HOW */}',
+    '      <section id="how" style={{ borderTop:`1px solid ${DIM}`, padding:"100px 48px", background:SURF }}>',
+    '        <div style={{ maxWidth:1100, margin:"0 auto" }}>',
+    '          <div style={{ marginBottom:64 }}>',
+    '            <p style={{ color:GOLD, fontSize:11, letterSpacing:"0.2em", textTransform:"uppercase", marginBottom:8 }}>How it works</p>',
+    '            <h2 style={{ fontFamily:SERIF, fontSize:"clamp(1.8rem,3vw,2.6rem)", fontWeight:700, letterSpacing:"-0.03em", margin:0 }}>',
+    '              Three steps to launch',
+    '            </h2>',
+    '          </div>',
+    '          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))", gap:0 }}>',
+    "            {steps.map((s, i) => (",
+    '              <div key={i} className="lk-step" style={{ padding:"0 40px 0 0", position:"relative" }}>',
+    "                {/* connector */}",
+    "                {i < steps.length - 1 && (",
+    '                  <div style={{ position:"absolute", top:20, left:40, right:0, height:1, background:`linear-gradient(90deg,${DIM},transparent)` }} />',
+    "                )}",
+    '                <div className="lk-step-dot" style={{',
+    '                  width:40, height:40, border:`1px solid ${DIM}`,',
+    '                  display:"flex", alignItems:"center", justifyContent:"center",',
+    '                  fontFamily:SERIF, fontSize:16, color:MUTED, marginBottom:28, background:BG, position:"relative"',
+    "                }}>{s.num}</div>",
+    '                <h4 style={{ fontFamily:SERIF, fontSize:20, fontWeight:600, marginBottom:12, lineHeight:1.2 }}>{s.title}</h4>',
+    '                <p  style={{ color:MUTED, fontSize:14, lineHeight:1.8, margin:0 }}>{s.desc}</p>',
+    "              </div>",
+    "            ))}",
+    "          </div>",
+    "        </div>",
+    "      </section>",
+    "",
+  );
+
+  /* ── PITCH SHOWCASE ──────────────────────────────────────── */
+  p(
+    "      {/* PITCH */}",
+    "      <section style={{ borderTop:`1px solid ${DIM}`, borderBottom:`1px solid ${DIM}`, padding:'80px 48px' }}>",
+    '        <div style={{ maxWidth:820, margin:"0 auto", textAlign:"center" }}>',
+    '          <div style={{ display:"flex", alignItems:"center", gap:16, justifyContent:"center", marginBottom:40 }}>',
+    '            <div style={{ flex:1, height:1, background:`linear-gradient(90deg,transparent,${DIM})` }} />',
+    '            <span style={{ color:MUTED, fontSize:11, letterSpacing:"0.2em", textTransform:"uppercase" }}>The pitch</span>',
+    '            <div style={{ flex:1, height:1, background:`linear-gradient(90deg,${DIM},transparent)` }} />',
+    "          </div>",
+    '          <blockquote style={{',
+    '            fontFamily:SERIF, fontSize:"clamp(1.6rem,3.5vw,2.8rem)",',
+    '            fontStyle:"italic", color:FG, lineHeight:1.2, margin:"0 0 40px",',
+    '            letterSpacing:"-0.02em"',
+    "          }}>",
+    '            &ldquo;{' + JSON.stringify(pitch) + '}&rdquo;',
+    "          </blockquote>",
+    '          <div style={{ display:"inline-flex", alignItems:"center", gap:8, padding:"8px 20px", border:`1px solid ${DIM}` }}>',
+    '            <div style={{ width:6, height:6, background:GOLD, borderRadius:"50%" }} />',
+    '            <span style={{ color:MUTED, fontSize:12 }}>',
+    "              " + JSON.stringify(name),
+    "            </span>",
+    "          </div>",
+    "        </div>",
+    "      </section>",
+    "",
+  );
+
+  /* ── CTA BAND ────────────────────────────────────────────── */
+  p(
+    "      {/* CTA */}",
+    "      <section style={{",
+    '        background:"linear-gradient(135deg,#0d0c0a 0%,#0a0a0a 50%,#0c0b09 100%)",',
+    '        position:"relative", overflow:"hidden"',
+    "      }}>",
+    "        <div style={{",
+    '          position:"absolute", top:"-30%", right:"-10%", width:600, height:600, borderRadius:"50%",',
+    '          background:"radial-gradient(circle,rgba(201,169,110,0.06) 0%,transparent 65%)"',
+    "        }} />",
+    "        <div style={{",
+    '          maxWidth:1100, margin:"0 auto", padding:"110px 48px",',
+    '          display:"flex", alignItems:"center", justifyContent:"space-between",',
+    '          gap:48, position:"relative", zIndex:1, flexWrap:"wrap"',
+    "        }}>",
+    "          <div>",
+    '            <p style={{ color:GOLD, fontSize:11, letterSpacing:"0.2em", textTransform:"uppercase", marginBottom:20 }}>',
+    '              Ready to ship?',
+    "            </p>",
+    "            <h2 style={{",
+    "              fontFamily:SERIF, fontWeight:700, lineHeight:1.05,",
+    '              fontSize:"clamp(2.4rem,5vw,4.2rem)", letterSpacing:"-0.03em", margin:0, maxWidth:560',
+    "            }}>",
+    '              Stop waiting.<br/>',
+    '              <em style={{ fontStyle:"italic", color:"#b8b0a0" }}>Start launching.</em>',
+    "            </h2>",
+    "          </div>",
+    '          <div style={{ display:"flex", flexDirection:"column", gap:14, alignItems:"flex-end", flexShrink:0 }}>',
+    '            <button className="lk-btn" onClick={() => window.open(' + JSON.stringify(ctaUrl) + ', "_blank")} style={{',
+    '              background:FG, color:BG, border:"none", cursor:"pointer",',
+    '              padding:"20px 52px", fontSize:14, fontFamily:MONO, fontWeight:700,',
+    '              letterSpacing:"0.08em", whiteSpace:"nowrap"',
+    "            }}>",
+    "              {" + JSON.stringify(cta + " →") + "}",
+    "            </button>",
+    '            <span style={{ color:MUTED, fontSize:12 }}>Free · No signup · Instant results</span>',
+    "          </div>",
+    "        </div>",
+    "      </section>",
+    "",
+  );
+
+  /* ── FOOTER ──────────────────────────────────────────────── */
+  p(
+    "      {/* FOOTER */}",
+    "      <footer style={{ borderTop:`1px solid ${DIM}`, padding:'32px 48px' }}>",
+    '        <div style={{ maxWidth:1100, margin:"0 auto", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:16 }}>',
+    '          <div style={{ display:"flex", alignItems:"center", gap:10 }}>',
+    '            <div style={{ width:7, height:7, background:GOLD, borderRadius:"50%" }} />',
+    '            <span style={{ fontFamily:SERIF, fontSize:16, fontWeight:600 }}>' + JSON.stringify(name) + '</span>',
+    '            <span style={{ color:DIM, fontSize:12, marginLeft:4 }}>—</span>',
+    '            <span style={{ color:MUTED, fontSize:12 }}>' + JSON.stringify(tagline) + '</span>',
+    "          </div>",
+    '          <span style={{ color:"#3a3a3a", fontSize:11, letterSpacing:"0.08em" }}>Built with LaunchKit</span>',
+    "        </div>",
+    "      </footer>",
+    "",
+  );
+
+  /* ── close ───────────────────────────────────────────────── */
+  p(
+    "    </div>",
+    "  );",
+    "};",
+    "",
+    "export default LandingPage;",
+  );
+
+  return L.join("\n");
 }
+
+/* ── GitHub scaffold builders ───────────────────────────────── */
 
 export function buildIndexHtml(name: string) {
   return [
@@ -303,7 +463,7 @@ export function buildPackageJson(name: string, desc: string) {
       },
     },
     null,
-    2
+    2,
   );
 }
 

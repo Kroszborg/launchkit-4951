@@ -383,7 +383,7 @@ function LandingTab({ data, code, view, setView, copied, onCopy, onPushGithub }:
 <script type="text/babel" data-presets="react">
 const {useState, useEffect} = React;
 try {
-${code}
+${code.replace(/export default \w+;?/g, '')}
 ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(LandingPage));
 } catch(e) {
   document.getElementById('error').style.display = 'block';
@@ -393,7 +393,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(
 </body>
 </html>`;
 
-  const EDITOR_H = 720;
+  const EDITOR_H = 820;
 
   return (
     <div>
