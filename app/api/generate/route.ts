@@ -62,7 +62,7 @@ export async function POST(request: Request) {
 
   try {
     const { object: copyData } = await generateObject({
-      model: google("gemini-2.0-flash"),
+      model: google("gemini-2.5-flash"),
       schema: CopySchema,
       system: systemPrompt,
       prompt: context,
@@ -83,6 +83,17 @@ export async function POST(request: Request) {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("Generate error:", msg);
-    return Response.json({ error: msg }, { status: 500 });
+
+    if (msg.includes("quota") || msg.includes("429") || msg.includes("RESOURCE_EXHAUSTED")) {
+      return Response.json({
+        error: "Rate limit hit — your free tier quota is full. Wait a minute and try again, or enable billing at aistudio.google.com to remove the limit.",
+      }, { status: 429 });
+    }
+
+    if (msg.includes("API key") || msg.includes("API_KEY") || msg.includes("401")) {
+      return Response.json({ error: "Invalid Gemini API key. Check GEMINI_API_KEY in your environment variables." }, { status: 401 });
+    }
+
+    return Response.json({ error: "Generation failed. Try again in a moment." }, { status: 500 });
   }
 }
