@@ -30,8 +30,10 @@ interface RepoMeta {
   language: string;
   topics: string[];
   readme: string;
+  packageInfo: string;
   owner: string;
   repo: string;
+  repoUrl: string;
 }
 interface GhResult {
   repoUrl: string;

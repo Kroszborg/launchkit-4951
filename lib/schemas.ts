@@ -18,7 +18,7 @@ export const CopySchema = z.object({
   tagline:     z.string().describe("4-6 word punchy tagline — different from pitch"),
   headline:    z.string().describe("Bold landing page headline. Max 10 words. Verb-first."),
   subheadline: z.string().describe("2 sentences: sentence 1 = what it does, sentence 2 = who benefits or why it matters"),
-  features:    z.array(FeatureSchema).min(3).max(3).describe("Exactly 3 features using real capabilities from the product"),
+  features:    z.array(FeatureSchema).min(4).max(4).describe("Exactly 4 features using real capabilities from the product"),
   steps:       z.array(StepSchema).min(3).max(3).describe("Exactly 3 how-it-works steps"),
   cta:         z.string().describe("CTA button text. 2-4 words. Action verb first."),
   ctaUrl:      z.string().describe("URL for the CTA — use the GitHub URL if available, else https://github.com"),

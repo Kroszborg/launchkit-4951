@@ -16,8 +16,8 @@ export function buildLandingTemplate(d: CopyData): string {
   const cta         = esc(d.cta         || "Get Started");
   const ctaUrl      = esc(d.ctaUrl      || "https://github.com");
 
-  const rawFeatures = (d.features || []).slice(0, 3);
-  while (rawFeatures.length < 3)
+  const rawFeatures = (d.features || []).slice(0, 4);
+  while (rawFeatures.length < 4)
     rawFeatures.push({ num: `0${rawFeatures.length + 1}`, title: "Feature", desc: "More details coming soon." });
   const features = rawFeatures.map((f) => ({
     num: esc(f.num || "01"), title: esc(f.title || ""), desc: esc(f.desc || ""),
@@ -256,9 +256,9 @@ export function buildLandingTemplate(d: CopyData): string {
     '                Everything you need to launch',
     '              </h2>',
     '            </div>',
-    '            <span style={{ color:DIM, fontSize:12, fontFamily:MONO }}>03 features</span>',
+    '            <span style={{ color:DIM, fontSize:12, fontFamily:MONO }}>04 features</span>',
     '          </div>',
-    '          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))", gap:1, background:DIM }}>',
+    '          <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:1, background:DIM }}>',
     "            {features.map((f, i) => (",
     '              <div key={i} className="lk-card" style={{',
     '                padding:"44px 36px 48px", background:BG,',

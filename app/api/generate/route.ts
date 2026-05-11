@@ -9,42 +9,63 @@ export const maxDuration = 60;
 export async function POST(request: Request) {
   const { description, repoMeta } = await request.json();
 
+  const repoUrl = repoMeta?.repoUrl || null;
+
   const context = repoMeta
     ? dedent`
+        === PRODUCT INFORMATION (use ONLY these details — do not invent or assume anything) ===
+
         Product name: ${repoMeta.name}
-        Description: ${repoMeta.description || description}
-        Language: ${repoMeta.language}
-        Topics: ${repoMeta.topics?.join(", ")}
-        README excerpt: ${repoMeta.readme?.slice(0, 2000)}
+        GitHub URL: ${repoMeta.repoUrl}
+        GitHub description: ${repoMeta.description || "(none)"}
+        Primary language: ${repoMeta.language || "(unknown)"}
+        Topics/tags: ${repoMeta.topics?.join(", ") || "(none)"}
+        Stars: ${repoMeta.stars}
+        ${repoMeta.packageInfo ? `\nPackage info:\n${repoMeta.packageInfo}` : ""}
+
+        README (full content — this is your primary source of truth):
+        ---
+        ${repoMeta.readme || "(no README found)"}
+        ---
       `
     : `Product description: ${description}`;
 
   const systemPrompt = dedent`
     You are a world-class product launch copywriter. Write like a senior PM who ships.
-    No em-dashes. No fluffy adjectives. No vague promises. Use the actual product details provided.
+    No em-dashes. No fluffy adjectives. No vague promises.
 
-    TWITTER/X: Hook on line 1 — state the ONE specific thing this product does using concrete nouns.
-    Then 2-4 short lines, each adding a specific fact or capability. No hashtags. No filler openers.
-    HARD LIMIT: 280 characters total. Count carefully.
+    CRITICAL: Base ALL copy strictly on the product information provided. Every claim, feature, and
+    benefit must come directly from the README or repo metadata. Do not invent capabilities, do not
+    use generic placeholder copy, do not write about things not mentioned in the context.
+
+    TWITTER/X: Hook on line 1 — state the ONE specific thing this product does using concrete nouns
+    pulled directly from the README. Then 2-4 short lines, each with a specific fact or feature from
+    the README. No hashtags. No "Excited to share". HARD LIMIT: 280 chars total.
     Example: "git diff, but readable.\n\nColour-coded. Side by side. No config.\n\ngithub.com/user/difft"
 
-    LINKEDIN: Start with the problem (1-2 sentences). Then what you built and the key insight.
-    Then 2-3 specific things it does (dash list). Then who it's for and how to access it.
-    Close with a real CTA. 150-300 words. Double newlines between paragraphs. First person.
+    LINKEDIN: Start with the real problem this project solves (from README). Then what was built and
+    the key insight. Then 2-3 specific capabilities (dash list, from actual features). Then who it's
+    for and the GitHub link as CTA. 150-300 words. Double newlines between paragraphs. First person.
 
     PRODUCT HUNT: HARD LIMIT 60 chars. Format: [Verb] your [thing] [benefit]. No exclamation marks.
-    Example: "Turn GitHub repos into landing pages instantly"
+    Must describe what it actually does from the README. Example: "Turn GitHub repos into landing pages instantly"
   `;
+
+  // Always lock ctaUrl to the real GitHub URL when available
+  const overrideCtaUrl = repoUrl;
 
   try {
     const { object: copyData } = await generateObject({
-      model: google("gemini-2.5-flash"),
+      model: google("gemini-2.0-flash"),
       schema: CopySchema,
       system: systemPrompt,
       prompt: context,
       temperature: 0.8,
       maxRetries: 2,
     });
+
+    // Always use the real GitHub URL, not whatever the AI guessed
+    if (overrideCtaUrl) copyData.ctaUrl = overrideCtaUrl;
 
     // Hard-enforce character limits as a final safety net
     if (copyData.twitter.length > 280)     copyData.twitter     = copyData.twitter.slice(0, 277) + "...";
