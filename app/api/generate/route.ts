@@ -109,7 +109,8 @@ export async function POST(request: Request) {
 
     return Response.json({ copy: copyData, landingCode });
   } catch (err) {
-    console.error("Generate error:", err);
-    return Response.json({ error: "Generation failed. Check your GEMINI_API_KEY." }, { status: 500 });
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("Generate error:", msg);
+    return Response.json({ error: msg }, { status: 500 });
   }
 }
