@@ -74,7 +74,7 @@ export async function POST(request: Request) {
 
   try {
     const copyResult = await generateText({
-      model: google("gemini-2.0-flash"),
+      model: google("gemini-2.5-flash"),
       system: systemPrompt,
       prompt: context,
       temperature: 0.8,
